@@ -143,6 +143,18 @@
     font-variant-numeric:tabular-nums;
   }
   .numfield:focus-visible { outline:2px solid var(--s1); outline-offset:1px; }
+  /* the address the reader proposes a site with — a line of text rather than a
+     number, so it is given the room a street address needs */
+  .textfield {
+    font:400 13.5px var(--sans); color:var(--ink); background:var(--plane);
+    border:1px solid var(--axis); border-radius:7px; padding:6px 10px;
+    min-width:min(32ch,58vw);
+  }
+  .textfield:focus-visible { outline:2px solid var(--s1); outline-offset:1px; }
+  .btn { font:500 12.5px var(--sans); color:var(--ink); background:var(--plane);
+         border:1px solid var(--axis); border-radius:7px; padding:6px 12px; cursor:pointer; }
+  .btn:hover { border-color:var(--ink-2); }
+  .btn[disabled] { opacity:.55; cursor:default; border-color:var(--axis); }
   @media (max-width:560px) { .toolbar .tnote { flex-basis:100%; } }
 
   /* top ten */
@@ -213,7 +225,23 @@
   .clabel { fill:var(--s2); font-size:11.5px; font-weight:600;
             paint-order:stroke; stroke:var(--surface); stroke-width:3px;
             stroke-linejoin:round; }
+  /* The proposed site is a place, like the church, so it takes the same cross —
+     hollow, and in a colour of its own, because it is somewhere the parish is
+     not. */
+  .propmark { fill:var(--surface); stroke:var(--s3); stroke-width:1.9;
+              stroke-linejoin:round; }
+  .plabel { fill:var(--s3); font-size:11.5px; font-weight:600;
+            paint-order:stroke; stroke:var(--surface); stroke-width:3px;
+            stroke-linejoin:round; }
   #drive-tiles:not(:empty) { margin-bottom:18px; }
+  #alt-tiles:not(:empty) { margin-bottom:18px; }
+  /* a heading inside a section, for the question the section asks second */
+  .subh { font-family:var(--serif); font-weight:600; font-size:19px; line-height:1.3;
+          margin:38px 0 6px; letter-spacing:-0.01em; }
+  /* the rule at no change on the shift histogram — where the parish is now,
+     which is a fact about the axis rather than an annotation on it, so it is
+     drawn solid and the median beside it stays the dashed one */
+  .zerorule { stroke:var(--ink-2); stroke-width:1.5; }
   /* the rule at the weighted median on the drive-time histogram — an
      annotation on one chart, in the ink of the words rather than a series */
   .medrule { stroke:var(--ink-2); stroke-width:1.5; stroke-dasharray:5 4; }
@@ -403,6 +431,30 @@
         <figcaption id="cap-drive"></figcaption>
       </figure>
     </div>
+    <div id="alt-block" hidden>
+      <h3 class="subh">If the church were somewhere else</h3>
+      <p class="lede" id="lede-alt"></p>
+      <div class="toolbar" id="altbar">
+        <span class="tlabel">Proposed site</span>
+        <div class="grp">
+          <input class="textfield" id="alt-q" type="text" autocomplete="off"
+                 placeholder="A street address"
+                 aria-label="Street address of the site to propose">
+          <button class="btn" id="alt-go" type="button">Try it</button>
+        </div>
+        <p class="tnote" id="alt-hint"></p>
+      </div>
+      <div class="status" id="alt-status" role="status" hidden></div>
+      <div class="tiles" id="alt-tiles"></div>
+      <div class="card" id="alt-card" hidden>
+        <figure>
+          <ul class="legend" id="lg-shift"></ul>
+          <div class="chart" id="c-shift"></div>
+          <figcaption id="cap-shift"></figcaption>
+        </figure>
+      </div>
+      <div class="note" id="alt-note"></div>
+    </div>
     <details id="zips-details">
       <summary>Show every ZIP code as a table</summary>
       <div class="scroll"><table id="t-zips"></table></div>
@@ -518,6 +570,11 @@ function htmlEl(tag, cls, parent, text) {
 }
 const num = (n, d = 0) =>
   n == null ? "—" : n.toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
+/* Everything else written into this page is the page's own words or a number
+   off the wire. An address is neither: the reader types it and a geocoder hands
+   it back, so it is escaped on the way into markup. */
+const esc = (str) => String(str).replace(/[&<>"]/g,
+  (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const day = (iso) => new Date(iso + "T12:00:00");
 const fmtDate = (iso, opts) =>
   day(iso).toLocaleDateString("en-US", opts || { month: "short", day: "numeric", year: "numeric" });
@@ -984,6 +1041,12 @@ const fmtLatLon = (c) =>
     over the parish, where it is the difference between two of them. */
 const fmtMins = (secs, d = 0) => num(secs / 60, d);
 
+/** A change in drive time rather than a drive: written with its sign, so that
+    a column of them can be read at a glance and a minus always means less
+    driving. */
+const fmtShift = (secs, d = 0) =>
+  (secs > 0 ? "+" : secs < 0 ? "−" : "±") + num(Math.abs(secs) / 60, d);
+
 /** How long the parish is from the church, weighted the way the map is
     coloured and over the ZIP codes the map is drawing — so it moves with both
     selectors, as the weighted centre does. The median comes with the mean
@@ -991,9 +1054,9 @@ const fmtMins = (secs, d = 0) => num(secs / 60, d);
     an hour to a mean of thirty and moves a median not at all. A ZIP code the
     router could not reach is left out of both, and counted so the page can say
     so. */
-function averageDrive(zips, weight) {
-  const rows = zips.filter((z) => z.drive != null && weight.of(z) > 0)
-                   .sort((a, b) => a.drive - b.drive);
+function averageDrive(zips, weight, of = (z) => z.drive) {
+  const rows = zips.filter((z) => of(z) != null && weight.of(z) > 0)
+                   .sort((a, b) => of(a) - of(b));
   const total = rows.reduce((a, z) => a + weight.of(z), 0);
   if (!total) return null;
   // The weighted median: the drive of the ZIP code the middle household of the
@@ -1001,15 +1064,16 @@ function averageDrive(zips, weight) {
   let seen = 0, median = null;
   for (const z of rows) {
     seen += weight.of(z);
-    if (median == null && seen >= total / 2) median = z.drive;
+    if (median == null && seen >= total / 2) median = of(z);
   }
   return {
-    mean: rows.reduce((a, z) => a + z.drive * weight.of(z), 0) / total,
+    mean: rows.reduce((a, z) => a + of(z) * weight.of(z), 0) / total,
     median,
     farthest: rows[rows.length - 1],
+    farSecs: of(rows[rows.length - 1]),
     total,
     zips: rows.length,
-    missing: zips.filter((z) => z.drive == null).length,
+    missing: zips.filter((z) => of(z) == null).length,
   };
 }
 
@@ -1149,11 +1213,249 @@ function drawDriveHist(container, W) {
   }
 }
 
-/** Where the church's own label can go: beside the cross, or under it. */
-const churchBox = (x, y, at) =>
-  at === "below" ? { x0: x - 42, x1: x + 42, y0: y + 10, y1: y + 26 }
-  : at === "right" ? { x0: x - 9, x1: x + 96, y0: y - 10, y1: y + 10 }
-  : { x0: x - 96, x1: x + 9, y0: y - 10, y1: y + 10 };
+/* ----------------------------------------------- against another location */
+
+/** How the drive would change if the church were somewhere else: one figure
+    per ZIP code, weighted the way the map is coloured and over the ZIP codes
+    the map is drawing, so both selectors move it as they move everything else
+    here. `now` and `then` are worked out over exactly the same rows — a ZIP
+    code the router could reach one way and not the other is in neither, so the
+    two figures are a comparison rather than two averages of different parishes.
+    A negative shift is less driving. */
+function shiftStats(zips, weight) {
+  const rows = zips.filter((z) => z.drive != null && z.alt != null && weight.of(z) > 0)
+                   .sort((a, b) => (a.alt - a.drive) - (b.alt - b.drive));
+  if (!rows.length) return null;
+  const total = rows.reduce((a, z) => a + weight.of(z), 0);
+  const shift = (z) => z.alt - z.drive;
+  const sum = (rs) => rs.reduce((a, z) => a + weight.of(z), 0);
+
+  // The middle household's own change, which is not the change in the median:
+  // half the parish would be moved less than this and half more.
+  let seen = 0, median = null;
+  for (const z of rows) {
+    seen += weight.of(z);
+    if (median == null && seen >= total / 2) median = shift(z);
+  }
+  const closer = rows.filter((z) => shift(z) < 0);
+  const farther = rows.filter((z) => shift(z) > 0);
+  return {
+    now: averageDrive(rows, weight),
+    then: averageDrive(rows, weight, (z) => z.alt),
+    median,
+    closer: { rows: closer, total: sum(closer) },
+    farther: { rows: farther, total: sum(farther) },
+    same: total - sum(closer) - sum(farther),
+    // Every household's change added up: what the parish as a whole would save,
+    // or spend, on one trip in.
+    saved: rows.reduce((a, z) => a - shift(z) * weight.of(z), 0),
+    total, zips: rows.length,
+    // Reached from the church but not from the proposal, or the other way
+    // about: in no figure here, and said so underneath.
+    missing: zips.filter((z) => weight.of(z) > 0 && (z.drive == null) !== (z.alt == null)).length,
+  };
+}
+
+/* Where the shift histogram's axis stops before it gathers, at each end. A
+   parish that moves across town has most of itself within a few minutes either
+   way and one ZIP code four states off that the move does not touch, so the
+   ends are cut tighter than the drive histogram's single tail is. */
+const SHIFT_CUT = 0.02;
+
+/** The shape of the change: the ZIP codes on the map gathered into equal steps
+    of minutes saved or added, each step carrying the households in it. The
+    steps straddle nothing — no change is a bin edge rather than the middle of a
+    bin — so every bar is wholly a saving or wholly a cost, and the colour can
+    say which. Both ends gather, and either gathering bar is labelled and set
+    off by a gap, as the drive histogram's one is. */
+function shiftHistogram(zips, weight) {
+  const rows = zips.filter((z) => z.drive != null && z.alt != null && weight.of(z) > 0)
+                   .map((z) => ({ z, d: (z.alt - z.drive) / 60, w: weight.of(z) }))
+                   .sort((a, b) => a.d - b.d);
+  if (!rows.length) return null;
+  const total = rows.reduce((a, r) => a + r.w, 0);
+  const at = (frac) => {
+    let seen = 0;
+    for (const r of rows) { seen += r.w; if (seen >= total * frac) return r.d; }
+    return rows[rows.length - 1].d;
+  };
+  const lo = Math.min(0, at(SHIFT_CUT)), hi = Math.max(0, at(1 - SHIFT_CUT));
+  const reach = Math.max(-lo, hi);
+  // Both sides are drawn in the one step, because a minute saved and a minute
+  // added have to be the same width for the two halves to be read against each
+  // other. The dozen bars are therefore a dozen across both sides.
+  const step = DRIVE_STEPS.find((v) => Math.ceil((reach + 1e-9) / v) * 2 <= DRIVE_BINS_MAX) ||
+               DRIVE_STEPS[DRIVE_STEPS.length - 1];
+  let klo = Math.ceil((-lo - 1e-9) / step), khi = Math.ceil((hi - 1e-9) / step);
+  // A side with anything on it gets a step of its own, so that a gathering bar
+  // there has a number to be gathered past.
+  if (rows[0].d < 0) klo = Math.max(1, klo);
+  if (rows[rows.length - 1].d > 0) khi = Math.max(1, khi);
+  if (klo + khi === 0) { klo = 1; khi = 1; }
+
+  const bins = [];
+  for (let i = -klo; i < khi; i++)
+    bins.push({ lo: i * step, hi: (i + 1) * step, total: 0, zips: [] });
+  const under = rows.filter((r) => r.d < -klo * step);
+  const over = rows.filter((r) => r.d >= khi * step);
+  if (under.length) bins.unshift({ lo: null, hi: -klo * step, under: true, total: 0, zips: [] });
+  if (over.length) bins.push({ lo: khi * step, hi: null, over: true, total: 0, zips: [] });
+  const base = under.length ? 1 : 0;
+
+  for (const r of rows) {
+    const b = under.length && r.d < -klo * step ? bins[0]
+            : over.length && r.d >= khi * step ? bins[bins.length - 1]
+            : bins[base + Math.min(khi - 1, Math.max(-klo, Math.floor(r.d / step))) + klo];
+    b.total += r.w;
+    b.zips.push(r.z);
+  }
+  return { step, bins, klo, khi, base, total,
+           under: under.length ? bins[0] : null,
+           over: over.length ? bins[bins.length - 1] : null };
+}
+
+/** What a bar of the shift histogram covers, in the words the hover uses. */
+const shiftBinLabel = (b) =>
+  b.under ? `${num(-b.hi)}+ min saved`
+  : b.over ? `${num(b.lo)}+ min added`
+  : b.hi <= 0 ? `${num(-b.hi)}–${num(-b.lo)} min saved`
+  : `${num(b.lo)}–${num(b.hi)} min added`;
+
+/* A bar is painted by who wins it: the proposal's colour where the drive gets
+   shorter, the church's where it gets longer. No third hue is introduced —
+   the two places are already on the map in these two colours. */
+const shiftColor = (b) => (b.hi != null && b.hi <= 0 ? "var(--s3)" : "var(--s2)");
+
+/** The axis's own numbers, which are differences and so carry a sign. */
+const fmtStep = (v) => (v > 0 ? "+" + num(v) : v < 0 ? "−" + num(-v) : "0");
+
+/** The histogram of the change. The bars touch, because the axis is a length
+    of time; no change is the solid rule down the middle, and the weighted
+    median change is the dashed one, so the tile above can be seen sitting in
+    the distribution it came out of. */
+function drawShiftHist(container, W) {
+  const weight = mapWeight(), zips = shownZips();
+  const h = shiftHistogram(zips, weight);
+  if (!h || !ALT) return;
+  const s = shiftStats(zips, weight);
+  const H = Math.max(210, Math.min(300, W * 0.34));
+  const M = { l: 44, r: 12, t: 20, b: 42 };
+  const iw = W - M.l - M.r, ih = H - M.t - M.b;
+  const svg = svgEl("svg", { width: W, height: H, role: "img",
+    "aria-label": `How much longer or shorter each ${weight.one}'s drive would be with the ` +
+      `church at ${ALT.short}, in ${h.step}-minute steps` }, container);
+
+  const hi = Math.max(...h.bins.map((b) => b.total)) * 1.12 || 1;
+  const cw = iw / h.bins.length;
+  const cx = (cell) => M.l + cell * cw;
+  const y = (v) => M.t + ih - (v / hi) * ih;
+
+  for (const v of ticks(0, hi, 4)) {
+    svgEl("line", { x1: M.l, x2: M.l + iw, y1: y(v), y2: y(v), class: "gridline" }, svg);
+    svgEl("text", { x: M.l - 8, y: y(v) + 4, class: "tick", "text-anchor": "end" }, svg)
+      .textContent = num(v, Number.isInteger(v) ? 0 : 1);
+  }
+  svgEl("line", { x1: M.l, x2: M.l + iw, y1: M.t + ih, y2: M.t + ih, class: "axisline" }, svg);
+
+  // The numbers go at the edges between the bars, and no change is always one
+  // of them: the thinning walks outward from it rather than in from the left,
+  // so the middle of the axis is never the label that gets dropped.
+  const K = h.klo + h.khi;
+  const room = W < 480 ? 5 : W < 720 ? 8 : 12;
+  const every = Math.max(1, Math.ceil((K + 1) / room));
+  const edges = [];
+  for (let i = h.klo; i >= 0; i -= every) edges.unshift(i);
+  for (let i = h.klo + every; i <= K; i += every) edges.push(i);
+  const label = (at, text) =>
+    svgEl("text", { x: at, y: H - 26, class: "tick", "text-anchor": "middle" }, svg)
+      .textContent = text;
+  for (const i of edges) {
+    // A gathering bar has no outer edge, so the number it would repeat is left
+    // off and the bar's own "≤" or "≥" stands under it instead.
+    if (h.under && i === 0) continue;
+    if (h.over && i === K) continue;
+    label(cx(h.base + i), fmtStep((i - h.klo) * h.step));
+  }
+  if (h.under) label(cx(0.5), `≤−${num(h.klo * h.step)}`);
+  if (h.over) label(cx(h.bins.length - 0.5), `≥+${num(h.khi * h.step)}`);
+  svgEl("text", { x: M.l + iw / 2, y: H - 6, class: "ann", "text-anchor": "middle" }, svg)
+    .textContent = W < 560 ? "Minutes saved (left) or added (right)"
+                           : "Minutes off the drive to the left, minutes onto it to the right";
+
+  const tip = tooltip(container);
+  h.bins.forEach((b, i) => {
+    const x0 = cx(i), x1 = cx(i + 1), top = y(b.total);
+    // A gathering bar stands off from the rest: it is the only one whose width
+    // is not the time it covers, and the gap says so before the hover has to.
+    const padL = b.over ? 6 : 0.75, padR = b.under ? 6 : 0.75;
+    if (b.total)
+      svgEl("path", { d: barPath(x0 + padL, top, Math.max(1, x1 - x0 - padL - padR),
+        M.t + ih - top, 3, "up"), fill: shiftColor(b) }, svg);
+    const named = b.zips.slice(0, 6).map((z) => z.zip).join(", ");
+    const rest = b.zips.length - 6;
+    svgEl("rect", { x: x0, y: M.t, width: Math.max(1, x1 - x0), height: ih,
+      fill: "transparent" }, svg)
+      .addEventListener("pointermove", () => tip.show((x0 + x1) / 2, Math.min(top, M.t + ih),
+        `<b>${shiftBinLabel(b)}</b>` +
+        `<div class="r"><span>${weight.label}</span><span>${num(b.total)}</span></div>` +
+        `<div class="r"><span>Share</span><span>${num((b.total / h.total) * 100, 0)}%</span></div>` +
+        (b.zips.length
+          ? `<div class="n">ZIP ${named}${rest > 0 ? ` and ${num(rest)} more` : ""}</div>`
+          : `<div class="n">No ${weight.noun} would move this far.</div>`)));
+  });
+  svg.addEventListener("pointerleave", tip.hide);
+
+  // Last, so that no bar is drawn over a rule and no rule over its words.
+  svgEl("line", { x1: cx(h.base + h.klo), x2: cx(h.base + h.klo), y1: M.t, y2: M.t + ih,
+    class: "zerorule" }, svg);
+  if (s && s.median != null) {
+    const cell = Math.max(0.4, Math.min(h.bins.length - 0.4,
+      h.base + h.klo + s.median / 60 / h.step));
+    const px = cx(cell);
+    svgEl("line", { x1: px, x2: px, y1: M.t, y2: M.t + ih, class: "medrule" }, svg);
+    const anchor = M.l + iw - px < 130 ? "end" : "start";
+    svgEl("text", { x: px + (anchor === "end" ? -7 : 7), y: M.t + 10, class: "medlabel",
+      "text-anchor": anchor }, svg).textContent =
+      `Median ${fmtShift(s.median, 1)} min`;
+  }
+}
+
+/** Where a marked place's own label can go: beside the cross, or under it.
+    The box is the label's own, so it is as wide as the words it has to hold. */
+const siteBox = (x, y, at, w) =>
+  at === "below" ? { x0: x - w / 2 - 4, x1: x + w / 2 + 4, y0: y + 10, y1: y + 26 }
+  : at === "right" ? { x0: x - 9, x1: x + w + 14, y0: y - 10, y1: y + 10 }
+  : { x0: x - w - 14, x1: x + 9, y0: y - 10, y1: y + 10 };
+
+/** A place on the map rather than one of its areas — the church, or the site
+    being proposed against it. A parish lives around its church, so on a narrow
+    map the weighted centre's label is a few pixels away: the words go beside
+    the cross where that side has the room, on the other side or under it where
+    it does not, and nowhere at all when none of the three is free — where the
+    legend is what says which cross is which. Either way the cross itself keeps
+    its ground from everything drawn after it. Off the edge of the frame the
+    place is simply not marked; the clip would take it anyway. */
+function markSite(P, lon, lat, text, taken, W, H) {
+  const [x, y] = P(lon, lat);
+  if (!(x >= 0 && x <= W && y >= 0 && y <= H)) return null;
+  const w = textWidth(text, 11.5);
+  const wide = W - x >= w + 30;
+  const at = [wide ? "right" : "left", wide ? "left" : "right", "below"]
+    .find((side) => !boxHits(siteBox(x, y, side, w), taken)) || null;
+  taken.push(at ? siteBox(x, y, at, w) : { x0: x - 9, x1: x + 9, y0: y - 9, y1: y + 9 });
+  return { cx: x, cy: y, at, text };
+}
+
+/** The words for a marked place, in whatever ink the place itself is drawn in. */
+function drawSiteLabel(svg, site, cls) {
+  if (!site.at) return;
+  svgEl("text", {
+    x: site.cx + (site.at === "right" ? 11 : site.at === "left" ? -11 : 0),
+    y: site.cy + (site.at === "below" ? 22 : 4), class: cls,
+    "text-anchor": site.at === "right" ? "start"
+                 : site.at === "left" ? "end" : "middle",
+  }, svg).textContent = site.text;
+}
 
 /** A Latin cross, centred on the point and two `s` tall. */
 const crossPath = (x, y, s) =>
@@ -1248,6 +1550,14 @@ function drawMap(container, W) {
         (z.drive != null
           ? `<div class="r"><span>Drive to church</span><span>` +
             `${fmtMins(z.drive)} min</span></div>`
+          : "") +
+        (ALT && z.alt != null
+          ? `<div class="r"><span>Drive to the proposal</span><span>` +
+            `${fmtMins(z.alt)} min</span></div>` +
+            (z.drive != null
+              ? `<div class="r"><span>Change</span><span>` +
+                `${fmtShift(z.alt - z.drive)} min</span></div>`
+              : "")
           : ""));
     });
   }
@@ -1269,23 +1579,13 @@ function drawMap(container, W) {
 
   // The church is the point every drive time is measured to, and the figure
   // means less without it, so it is on the map the same way the centre is: an
-  // annotation the labels make way for. Off the edge of the frame it is simply
-  // not drawn — the clip would take it anyway.
-  const [chx, chy] = P(CHURCH.lon, CHURCH.lat);
-  let church = null;
-  if (chx >= 0 && chx <= W && chy >= 0 && chy <= H) {
-    // A parish lives around its church, so on a narrow map the centre's label
-    // is a few pixels away: the label goes beside the cross where the side has
-    // the room, on the other side or under it where it does not, and nowhere at
-    // all if none of the three is free — where the legend is what says what the
-    // cross is. Either way the cross itself keeps its ground from the ZIP codes.
-    const wide = W - chx >= 130;
-    const at = [wide ? "right" : "left", wide ? "left" : "right", "below"]
-      .find((s) => !boxHits(churchBox(chx, chy, s), taken)) || null;
-    church = { cx: chx, cy: chy, at };
-    taken.push(at ? churchBox(chx, chy, at)
-                  : { x0: chx - 9, x1: chx + 9, y0: chy - 9, y1: chy + 9 });
-  }
+  // annotation the labels make way for. The site the reader is proposing is
+  // marked the same way and offered the room first, because it is the thing
+  // being looked at — and it goes down whether or not its own drive times have
+  // come back yet, since where it is is the half of the answer the router is
+  // not needed for.
+  const site = ALT ? markSite(P, ALT.lon, ALT.lat, "Proposed site", taken, W, H) : null;
+  const church = markSite(P, CHURCH.lon, CHURCH.lat, "The church", taken, W, H);
 
   // A line a reader cannot name is not a frame, so the counties and the river
   // are named on the map itself. Each name sits at the Census's own interior
@@ -1347,13 +1647,11 @@ function drawMap(container, W) {
 
   if (church) {
     svgEl("path", { d: crossPath(church.cx, church.cy, 7), class: "churchmark" }, svg);
-    if (church.at)
-      svgEl("text", {
-        x: church.cx + (church.at === "right" ? 11 : church.at === "left" ? -11 : 0),
-        y: church.cy + (church.at === "below" ? 22 : 4), class: "clabel",
-        "text-anchor": church.at === "right" ? "start"
-                     : church.at === "left" ? "end" : "middle",
-      }, svg).textContent = "The church";
+    drawSiteLabel(svg, church, "clabel");
+  }
+  if (site) {
+    svgEl("path", { d: crossPath(site.cx, site.cy, 8), class: "propmark" }, svg);
+    drawSiteLabel(svg, site, "plabel");
   }
 }
 
@@ -1755,6 +2053,161 @@ function setMapView(patch) {
   renderPlaces();
 }
 
+/* ------------------------------------------- the location being proposed */
+
+/* Somewhere the parish is not, offered so that "what if we were over there?"
+   can be answered from the same rows as "how far are we now?". Nothing about
+   it is in either spreadsheet: the reader types an address, the Census's own
+   geocoder turns it into a point, and the router is asked the same question a
+   second time with that point as the destination. It changes no figure the
+   page already had — the drive to the church, the shading, the weighted centre
+   and the histogram under the map are all what they were — and it is kept in
+   this browser beside the reader's other choices rather than anywhere else. */
+const ALT_STORE = "parish-alt-location";
+let ALT = null;         // { address, short, lat, lon }, once one is settled on
+let ALT_BUSY = null;    // what is being waited for, in the words the bar shows
+let ALT_ERROR = null;   // why the last attempt got nowhere
+let ALT_MATCHES = null; // more than one address answered to what was typed
+
+/* The Census Bureau's own geocoder, which is where the coordinate for CHURCH in
+   this file came from: keyless, and built on the same address ranges the
+   boundaries on the map are cut from, so a point it hands back lands where the
+   map says it should. It is read as a script tag rather than fetched — unlike
+   TIGERweb it sends no header letting another origin read its answer, and JSONP
+   is how it is meant to be asked from a page like this one. It matches ranges
+   along streets and nothing else, so a city, a ZIP code or the name of a
+   building on its own matches nothing at all, and the page says so rather than
+   putting the proposal somewhere plausible. */
+const GEOCODER = "https://geocoding.geo.census.gov/geocoder/locations/onelineaddress";
+
+/** The geocoder answers in capitals, and the page is not written in them: the
+    street and the city are given back their case and the state is left alone,
+    so a proposal reads the way CHURCH.address does two paragraphs above it. */
+function titleAddress(str) {
+  const cap = (part) => part.replace(/\S+/g, (w) =>
+    /^[NSEW]{1,2}$/.test(w) ? w : w.charAt(0) + w.slice(1).toLowerCase());
+  const parts = String(str).split(",").map((x) => x.trim()).filter(Boolean);
+  // What comes back is street, city, state, ZIP — and the comma before a ZIP
+  // code is not how an address is written.
+  if (parts.length === 4)
+    return `${cap(parts[0])}, ${cap(parts[1])}, ${parts[2].toUpperCase()} ${parts[3]}`;
+  return parts.map(cap).join(", ");
+}
+
+const placeOf = (address, lat, lon) =>
+  ({ address, short: address.split(",")[0].trim() || address, lat, lon });
+
+/** Every address the geocoder will own to for what was typed, best first. It
+    returns none for an address it cannot place and occasionally more than one,
+    and the reader is asked which rather than being given the first of them. */
+function geocode(query) {
+  return new Promise((resolve, reject) => {
+    const name = "__geo_" + Math.random().toString(36).slice(2);
+    const el = document.createElement("script");
+    const done = (err, found) => {
+      clearTimeout(timer);
+      delete window[name];
+      el.remove();
+      err ? reject(err) : resolve(found);
+    };
+    const timer = setTimeout(
+      () => done(new Error("the geocoder did not answer in time")), TIMEOUT_MS);
+    window[name] = (res) => {
+      const matches = (res && res.result && res.result.addressMatches) || [];
+      done(null, matches
+        .filter((m) => m.coordinates &&
+                       isFinite(+m.coordinates.x) && isFinite(+m.coordinates.y))
+        .slice(0, 5)
+        .map((m) => placeOf(titleAddress(m.matchedAddress || query),
+                            +m.coordinates.y, +m.coordinates.x)));
+    };
+    el.onerror = () => done(new Error("the geocoder could not be reached"));
+    el.src = `${GEOCODER}?address=${encodeURIComponent(query)}` +
+             `&benchmark=Public_AR_Current&format=jsonp&callback=${name}`;
+    document.head.appendChild(el);
+  });
+}
+
+/** A proposal the reader left here last time. It is checked before it is
+    trusted: it is the one thing on the page that comes back out of the browser
+    as a place rather than as a setting. */
+function restoreAlt() {
+  try {
+    const v = JSON.parse(localStorage.getItem(ALT_STORE) || "null");
+    if (v && typeof v.address === "string" && isFinite(+v.lat) && isFinite(+v.lon) &&
+        Math.abs(+v.lat) <= 90 && Math.abs(+v.lon) <= 180)
+      ALT = placeOf(String(v.address).slice(0, 140), +v.lat, +v.lon);
+  } catch (_) { /* private mode, or a browser that refuses storage */ }
+}
+
+/** The same read the church's drive times came from, asked again with the
+    proposal as the destination. The map is redrawn before it is sent as well as
+    after it comes back: the cross belongs on the map as soon as there is a
+    place for it, and the figures follow when the router answers. */
+async function routeAlt() {
+  const placed = PLACES.zips.filter((z) => z.geometry);
+  ALT_BUSY = "Working out the drive to the proposed site…";
+  ALT_ERROR = null;
+  // Whatever was proposed before this is not what is being proposed now, so its
+  // times go before the request rather than when the answer comes back: a
+  // figure under the wrong address for as long as a routing request takes is
+  // worse than no figure at all.
+  placed.forEach((z) => { z.alt = null; });
+  renderPlaces();
+  try {
+    const secs = await driveTimes(placed, ALT);
+    placed.forEach((z, i) => { z.alt = secs[i]; });
+  } catch (err) {
+    ALT_ERROR = err.message || String(err);
+  }
+  ALT_BUSY = null;
+  renderPlaces();
+}
+
+async function proposeAlt(place) {
+  ALT = place;
+  ALT_MATCHES = null;
+  try { localStorage.setItem(ALT_STORE, JSON.stringify(ALT)); } catch (_) { /* refused */ }
+  await routeAlt();
+}
+
+function clearAlt() {
+  ALT = null;
+  ALT_MATCHES = ALT_ERROR = ALT_BUSY = null;
+  PLACES.zips.forEach((z) => { z.alt = null; });
+  try { localStorage.removeItem(ALT_STORE); } catch (_) { /* refused */ }
+  $("alt-q").value = "";
+  renderPlaces();
+}
+
+/** What the button and the return key both do: the address, then the routes. */
+async function searchAlt() {
+  if (!PLACES || ALT_BUSY) return;
+  const query = $("alt-q").value.trim();
+  ALT_MATCHES = ALT_ERROR = null;
+  if (!query) { renderPlaces(); return; }
+  ALT_BUSY = "Looking that address up…";
+  renderPlaces();
+  let found = [];
+  try {
+    found = await geocode(query);
+  } catch (err) {
+    ALT_ERROR = err.message || String(err);
+  }
+  ALT_BUSY = null;
+  if (ALT_ERROR) { renderPlaces(); return; }
+  if (!found.length) {
+    ALT_ERROR = "no street address matched that — the geocoder knows ranges along " +
+                "streets, so a house number and a street, with the city or the ZIP code, " +
+                "is what it can place";
+    renderPlaces();
+    return;
+  }
+  if (found.length === 1) { await proposeAlt(found[0]); return; }
+  ALT_MATCHES = found;
+  renderPlaces();
+}
+
 function renderPlaces() {
   const weight = mapWeight(), zips = shownZips(), scale = mapScale();
   const drive = averageDrive(zips, weight);
@@ -1792,6 +2245,7 @@ function renderPlaces() {
   })).concat([
     { color: "var(--mark)", dot: true, label: "Weighted centre" },
     { color: "var(--s2)", dot: true, label: "The church" },
+    ...(ALT ? [{ color: "var(--s3)", ring: true, label: "Proposed site" }] : []),
     // The ground, in the order the eye should read it: the counties the shading
     // is framed by, the river it is cut by, and the metro area last, which is
     // now a boundary among them rather than the map's subject.
@@ -1820,6 +2274,8 @@ function renderPlaces() {
       : "") +
     `The cross is the church, at ${CHURCH.short}, and the drive time on each ZIP code's ` +
     `hover and in the table below is to it from that same interior point. ` +
+    (ALT ? `The hollow cross is the site being proposed against it, at ` +
+           `${esc(ALT.short)}. ` : "") +
     `Boundaries are 2020 Census ZIP Code Tabulation Areas, read from the Census Bureau's ` +
     `TIGERweb service as the page loads` +
     (ground.length
@@ -1829,6 +2285,7 @@ function renderPlaces() {
     `. The ${MSA.label} is the faint dashed rule.`;
 
   renderDriveHist(zips, weight);
+  renderAlt(zips, weight);
   renderZipTable();
 
   const bad = PLACES.issues;
@@ -1867,6 +2324,28 @@ function renderPlaces() {
         : "");
 }
 
+/** One stat tile. The unit rides beside the figure, because a length of time
+    and what it is measured in are one thing on the page as they are in the
+    sentence. */
+function statTile(el, k, v, unit, meta) {
+  const d = htmlEl("div", "tile", el);
+  htmlEl("div", "k", d, k);
+  d.insertAdjacentHTML("beforeend",
+    `<div class="v">${v}${unit ? ` <small>${unit}</small>` : ""}</div>` +
+    `<div class="m">${meta}</div>`);
+}
+
+/** A change in drive time, coloured by whether it is an improvement rather than
+    by its sign: less driving is better, which is the other way round from every
+    delta above it on the page, so the arrow follows the good rather than the
+    up. */
+function driveDelta(then, now) {
+  const d = then - now;
+  const cls = Math.abs(d) < 30 ? "flat" : d < 0 ? "up" : "down";
+  const arrow = cls === "flat" ? "±" : d < 0 ? "▼" : "▲";
+  return `<span class="delta ${cls}">${arrow} ${num(Math.abs(d) / 60, 1)} min</span>`;
+}
+
 /** The figures the drive times exist for, over the ZIP codes on the map and
     weighted the way the map is coloured — so both selectors move them, and the
     label says which weighting they are being read under. */
@@ -1882,12 +2361,7 @@ function renderDrive(drive, weight) {
         : `None of the ZIP codes on the map could be routed to the church.`) + `</div>`;
     return;
   }
-  const tile = (k, v, meta) => {
-    const d = htmlEl("div", "tile", el);
-    htmlEl("div", "k", d, k);
-    d.insertAdjacentHTML("beforeend",
-      `<div class="v">${v} <small>min</small></div><div class="m">${meta}</div>`);
-  };
+  const tile = (k, v, meta) => statTile(el, k, v, "min", meta);
   const over = `${num(drive.total)} ${drive.total === 1 ? weight.one : weight.noun} in ` +
                `${num(drive.zips)} ZIP code${drive.zips === 1 ? "" : "s"}` +
                (MAP_VIEW.extent === "msa" ? `, ${MSA.label} only` : "");
@@ -1896,7 +2370,7 @@ function renderDrive(drive, weight) {
   tile(`Half the ${weight.noun} are within`, fmtMins(drive.median, 1),
        `The ${weight.adj}-weighted median — the far tail pulls the mean and leaves this`);
   const far = weight.of(drive.farthest);
-  tile("The farthest ZIP code", fmtMins(drive.farthest.drive),
+  tile("The farthest ZIP code", fmtMins(drive.farSecs),
        `ZIP ${drive.farthest.zip}, where ${num(far)} ` +
        `${far === 1 ? `${weight.one} lives` : `${weight.noun} live`}`);
 }
@@ -1938,14 +2412,173 @@ function renderDriveHist(zips, weight) {
     `one drive, so a bar is only as fine as the ZIP codes in it are.`;
 }
 
+/** The proposed site: the control that sets one, the state of the two reads
+    behind it, the figures for how the drive would shift, and the histogram
+    those figures are taken from. It follows the map's selectors like everything
+    else in the section — switching to people, or to Everywhere, re-weights the
+    comparison rather than only the map above it. */
+function renderAlt(zips, weight) {
+  const block = $("alt-block");
+  // A comparison needs something to compare against: with no drive time to the
+  // church there is nothing to shift, and the note under the map has already
+  // said why there is none.
+  const routable = PLACES.zips.some((z) => z.drive != null);
+  block.hidden = !routable;
+  if (!routable) return;
+
+  $("lede-alt").innerHTML =
+    `Every figure above is the drive to ${CHURCH.short}. Put another address below and the ` +
+    `router is asked the same question a second time — the same ZIP codes, the same ` +
+    `weighting, the same free-flow roads — so the two can be read against each other. ` +
+    `The proposal goes on the map as a hollow cross, and it is yours alone: it is in ` +
+    `neither spreadsheet, it changes none of the figures above, and it is kept in this ` +
+    `browser until you clear it.`;
+  $("alt-hint").innerHTML = ALT
+    ? `Try another address to move the proposal, or clear it to put the section back.`
+    : `A street address in the United States — a house number and a street, with the town ` +
+      `or the ZIP code.`;
+  $("alt-go").disabled = !!ALT_BUSY;
+
+  // The bar under the control carries whichever of the four states the section
+  // is in: waiting on a read, asking which address was meant, saying why
+  // nothing came of one, or naming the site the figures below are for.
+  const st = $("alt-status");
+  st.innerHTML = "";
+  st.classList.toggle("err", !!ALT_ERROR);
+  if (ALT_BUSY) {
+    st.innerHTML = `<span class="spin"></span> ${ALT_BUSY}`;
+  } else if (ALT_MATCHES) {
+    htmlEl("span", null, st, "More than one address answers to that — which was meant?");
+    for (const m of ALT_MATCHES) {
+      const b = htmlEl("button", null, st, m.address);
+      b.type = "button";
+      b.addEventListener("click", () => proposeAlt(m));
+    }
+  } else if (ALT_ERROR) {
+    st.innerHTML = `<span><strong>Nothing to compare against yet.</strong> ` +
+                   `${sentence(ALT_ERROR)}</span>`;
+  } else if (ALT) {
+    st.innerHTML = `<span>Comparing <strong>${esc(ALT.address)}</strong> against ` +
+                   `${CHURCH.address}.</span>`;
+    const b = htmlEl("button", null, st, "Clear the proposal");
+    b.type = "button";
+    b.addEventListener("click", clearAlt);
+  }
+  st.hidden = !st.innerHTML;
+
+  const el = $("alt-tiles");
+  el.innerHTML = "";
+  const shift = ALT ? shiftStats(zips, weight) : null;
+  $("alt-card").hidden = !shift;
+  if (!shift) {
+    // The router can answer and still reach nothing: a point off the road
+    // network comes back with no duration at all, which is not an error and is
+    // not a comparison either.
+    if (ALT && !ALT_BUSY && !ALT_ERROR)
+      el.innerHTML = `<div class="note" style="margin:0"><strong>Nothing to compare ` +
+        `here.</strong> None of the ZIP codes on the map could be routed to ` +
+        `${esc(ALT.short)}, so there is no drive to set against the one to church.</div>`;
+    $("alt-note").innerHTML = altNote(null, weight);
+    return;
+  }
+
+  const over = `${num(shift.total)} ${shift.total === 1 ? weight.one : weight.noun} in ` +
+               `${num(shift.zips)} ZIP code${shift.zips === 1 ? "" : "s"}` +
+               (MAP_VIEW.extent === "msa" ? `, ${MSA.label} only` : "");
+  statTile(el, "Average drive to the proposal", fmtMins(shift.then.mean, 1), "min",
+           `${driveDelta(shift.then.mean, shift.now.mean)} against ` +
+           `${fmtMins(shift.now.mean, 1)} min to church — the ${weight.adj}-weighted mean ` +
+           `over ${over}`);
+  statTile(el, `Half the ${weight.noun} would be within`, fmtMins(shift.then.median, 1), "min",
+           `${driveDelta(shift.then.median, shift.now.median)} against ` +
+           `${fmtMins(shift.now.median, 1)} min now — the ${weight.adj}-weighted median`);
+  statTile(el, "Closer to the proposal", num(shift.closer.total),
+           shift.closer.total === 1 ? weight.one : weight.noun,
+           `${num((shift.closer.total / shift.total) * 100, 0)}% of the ` +
+           `${num(shift.total)} ${weight.noun} compared; ` +
+           `${num(shift.farther.total)} would be farther` +
+           (shift.same ? `, and ${num(shift.same)} exactly as far` : ""));
+  // The parish's own change, added up rather than averaged: the figure a
+  // decision is actually made against, and the one an average of thirty
+  // minutes hides.
+  const net = shift.saved;
+  statTile(el, net >= 0 ? "Driving saved, all together" : "Driving added, all together",
+           num(Math.abs(net) / 60, 0), "min",
+           `Every ${weight.one}'s change added up, one way — ` +
+           `${num(Math.abs(net) / 60 / shift.total, 1)} min each on average, over ${over}`);
+
+  const h = shiftHistogram(zips, weight);
+  legend($("lg-shift"), [
+    { color: "var(--s3)", box: true, label: `${weight.label} closer to the proposal` },
+    { color: "var(--s2)", box: true, label: `${weight.label} farther from it` },
+    { color: "var(--ink-2)", label: "No change" },
+    { color: "var(--ink-2)", dash: true, label: "Median change" },
+  ]);
+  mount($("c-shift"), drawShiftHist);
+  $("cap-shift").innerHTML =
+    `Every bar is the <strong>${weight.noun}</strong> whose drive would change by that much ` +
+    `if the church were at ${esc(ALT.short)}, in ${num(h.step)}-minute steps` +
+    (MAP_VIEW.extent === "msa"
+      ? `, over the ${num(zips.length)} ZIP codes inside the ${MSA.label}`
+      : `, over every ZIP code the sheet reaches`) + `. ` +
+    `Left of the solid rule is less driving than to ${CHURCH.short} and right of it is ` +
+    `more; the dashed rule is the ${weight.adj}-weighted median change, which is the ` +
+    `middle household's own — not the change in the median above. ` +
+    (h.under
+      ? `The first bar gathers everyone who would save more than ` +
+        `${num(h.klo * h.step)} minutes — ${num(h.under.total)} ` +
+        `${h.under.total === 1 ? weight.one : weight.noun} in ` +
+        `${num(h.under.zips.length)} ZIP code${h.under.zips.length === 1 ? "" : "s"}. `
+      : "") +
+    (h.over
+      ? `The last bar gathers everyone who would take more than ` +
+        `${num(h.khi * h.step)} minutes longer — ${num(h.over.total)} ` +
+        `${h.over.total === 1 ? weight.one : weight.noun} in ` +
+        `${num(h.over.zips.length)} ZIP code${h.over.zips.length === 1 ? "" : "s"}. `
+      : "") +
+    `A whole ZIP code moves as one, so a bar is only as fine as the ZIP codes in it are.`;
+
+  $("alt-note").innerHTML = altNote(shift, weight);
+}
+
+/** What the comparison rests on, said under it rather than assumed: where the
+    point came from, where the times came from, and what is not being claimed. */
+function altNote(shift, weight) {
+  return `The address is turned into a point by the Census Bureau's own geocoder — the same ` +
+    `one the church's coordinate in this page came from, so a proposal lands on the map ` +
+    `where the boundaries say it should. It matches ranges along streets and nothing else: ` +
+    `a town, a ZIP code or the name of a building on its own will not place, and a house ` +
+    `number and a street will. The drive times are the router's, asked exactly as the ` +
+    `church's were — one route per ZIP code, from the Census's interior point of it, at ` +
+    `free-flow speeds — so the two carry the same approximation and the difference between ` +
+    `them carries it twice. ` +
+    (shift && shift.missing
+      ? `<strong>${num(shift.missing)} ZIP code${shift.missing === 1 ? "" : "s"} on the map ` +
+        `could be routed to one of the two and not the other</strong>, and ` +
+        `${shift.missing === 1 ? "is" : "are"} in none of the figures here: both averages ` +
+        `above are over the same ${num(shift.zips)} ZIP codes, so they are a comparison ` +
+        `rather than two averages of different parishes. `
+      : "") +
+    `What is being compared is the driving and nothing else — a building, what it costs and ` +
+    `who would still come are not in this page and are not in these figures. Nothing about ` +
+    `the proposal is written to either spreadsheet or sent anywhere but to the geocoder and ` +
+    `the router: it is kept in this browser, and clearing it puts the section back to the ` +
+    `${weight.noun} as they drive today.`;
+}
+
 function renderZipTable() {
   const weight = mapWeight(), other = otherWeight();
   const t = $("t-zips");
   t.innerHTML = "";
   const head = htmlEl("tr", null, htmlEl("thead", null, t));
-  for (const [label, cls] of [["ZIP code", ""], ["Families", "n"], ["People", "n"],
-                              ["Per family", "n"], ["Drive (min)", "n"], ["On the map", ""]])
-    htmlEl("th", cls, head, label);
+  // The proposal's two columns are here only while there is a proposal: the
+  // table carries what the map and the hover cannot, and an empty column is
+  // neither.
+  const cols = [["ZIP code", ""], ["Families", "n"], ["People", "n"],
+                ["Per family", "n"], ["Drive (min)", "n"]];
+  if (ALT) cols.push(["Proposed (min)", "n"], ["Change (min)", "n"]);
+  cols.push(["On the map", ""]);
+  for (const [label, cls] of cols) htmlEl("th", cls, head, label);
   const body = htmlEl("tbody", null, t);
   const rows = [...PLACES.zips].sort((a, b) =>
     weight.of(b) - weight.of(a) || other.of(b) - other.of(a) || a.zip.localeCompare(b.zip));
@@ -1956,6 +2589,11 @@ function renderZipTable() {
     htmlEl("td", "n", tr, num(z.people));
     htmlEl("td", "n", tr, num(z.people / z.families, 1));
     htmlEl("td", "n", tr, z.drive != null ? fmtMins(z.drive) : "—");
+    if (ALT) {
+      htmlEl("td", "n", tr, z.alt != null ? fmtMins(z.alt) : "—");
+      htmlEl("td", "n", tr, z.alt != null && z.drive != null
+                            ? fmtShift(z.alt - z.drive) : "—");
+    }
     htmlEl("td", "why", tr, !z.geometry ? "no Census area for this ZIP code"
                           : z.msa ? MSA.label : "outside the " + MSA.label);
   }
@@ -1978,13 +2616,22 @@ async function bootPlaces() {
   const sec = $("places-sec");
   sec.querySelector("h2").after(placesBar);
   placesParts.forEach((id) => { $(id).hidden = true; });
+  // Not one of the parts that come back with the read: whether it belongs on
+  // the page at all depends on there being drive times to compare against, and
+  // renderAlt() is what decides that.
+  $("alt-block").hidden = true;
   placesSay(`<span class="spin"></span> Reading the family locations…`);
   sec.hidden = false;
   try {
     PLACES = await loadPlaces();
+    if (ALT) $("alt-q").value = ALT.address;
     renderPlaces();
     placesParts.forEach((id) => { $(id).hidden = false; });
     placesBar.remove();
+    // A proposal the reader left in this browser is theirs still, and the page
+    // keeps no drive times of its own — that one included — so the router is
+    // asked for it again rather than remembered.
+    if (ALT) routeAlt();
   } catch (err) {
     placesSay(`<span><strong>Could not draw the map.</strong> ` +
       `${sentence(err.message || String(err))} This page keeps no copy of the ` +
@@ -2357,19 +3004,21 @@ const HYDRO_QUERY = `${TIGER}/Hydro/MapServer/1/query`;
 const OSRM_TABLE = "https://router.project-osrm.org/table/v1/driving/";
 const OSRM_MAX_SOURCES = 90;
 
-/** Seconds to the church from each point, in the order the points came in. A
-    point the router cannot reach comes back null rather than dropping out, so
-    what is missing stays countable. */
-async function driveTimes(points) {
+/** Seconds to one place from each point, in the order the points came in. The
+    destination is a parameter rather than the church, because the page asks the
+    same question of a location the reader proposes. A point the router cannot
+    reach comes back null rather than dropping out, so what is missing stays
+    countable. */
+async function driveTimes(points, dest) {
   const out = [];
   for (let i = 0; i < points.length; i += OSRM_MAX_SOURCES)
-    out.push(...(await driveChunk(points.slice(i, i + OSRM_MAX_SOURCES))));
+    out.push(...(await driveChunk(points.slice(i, i + OSRM_MAX_SOURCES), dest)));
   return out;
 }
 
-async function driveChunk(points) {
+async function driveChunk(points, dest) {
   const at = (p) => `${p.lon.toFixed(6)},${p.lat.toFixed(6)}`;
-  const url = `${OSRM_TABLE}${[CHURCH, ...points].map(at).join(";")}` +
+  const url = `${OSRM_TABLE}${[dest, ...points].map(at).join(";")}` +
               `?destinations=0&sources=${points.map((_, i) => i + 1).join(";")}` +
               `&annotations=duration`;
   const ctl = new AbortController();
@@ -2556,7 +3205,7 @@ async function loadPlaces() {
       ...around, where: `NAME='${RIVER.name}'`,
       outFields: "NAME,AREAWATER,INTPTLAT,INTPTLON", maxAllowableOffset: "0.002",
     }, `the ${RIVER.label}`).catch(() => []),
-    driveTimes(placed).then((secs) => ({ secs }))
+    driveTimes(placed, CHURCH).then((secs) => ({ secs }))
       .catch((err) => ({ error: err.message || String(err) })),
   ]);
   placed.forEach((z, i) => { z.drive = driving.secs ? driving.secs[i] : null; });
@@ -2587,10 +3236,19 @@ const sections = [...document.querySelectorAll(
   "#trailbar, #offsetbar, .wrap section:not(#places-sec)")];
 sections.forEach((s) => { s.hidden = true; });
 
+/* The one control on the page that is a line of text rather than a choice
+   between two, so it is in the markup and stays there: rebuilding it on every
+   redraw would take the words out from under whoever was typing them. */
+$("alt-go").addEventListener("click", searchAlt);
+$("alt-q").addEventListener("keydown", (ev) => {
+  if (ev.key === "Enter") { ev.preventDefault(); searchAlt(); }
+});
+
 (async function boot() {
   restoreTrail();
   restoreOffset();
   restoreMapView();
+  restoreAlt();
   // A second sheet and the Census, read alongside rather than after: the map is
   // its own section with its own state, and either read can fail on its own.
   bootPlaces();
