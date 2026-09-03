@@ -1,0 +1,2616 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Parish Attendance</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Spectral:wght@500;600&display=swap">
+<style>
+  :root {
+    color-scheme: light;
+    --plane:#f9f9f7; --surface:#fcfcfb;
+    --ink:#0b0b0b; --ink-2:#52514e; --muted:#898781;
+    --grid:#e1e0d9; --axis:#c3c2b7; --ring:rgba(11,11,11,0.10);
+    --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --mark:#6f4fd6;
+    --good:#0ca30c; --warn:#fab219; --serious:#ec835a; --critical:#d03b3b;
+    --up:#006300;
+    --o1:#86b6ef; --o2:#5598e7; --o3:#2a78d6; --o4:#1c5cab; --o5:#0d366b;
+    --on1:#0b0b0b; --on2:#0b0b0b; --on3:#0b0b0b; --on4:#ffffff; --on5:#ffffff;
+    /* water, kept off the ramp's hue on purpose: the shading owns blue, so the
+       river reads as water rather than as another step of it. */
+    --water:#aed3d9; --water-line:#4d8b96;
+    --serif:"Spectral",ui-serif,Georgia,"Times New Roman",serif;
+    --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --plane:#0d0d0d; --surface:#1a1a19;
+      --ink:#ffffff; --ink-2:#c3c2b7; --muted:#898781;
+      --grid:#2c2c2a; --axis:#383835; --ring:rgba(255,255,255,0.10);
+      --s1:#3987e5; --s2:#d95926; --s3:#199e70; --mark:#a494f2;
+      --up:#0ca30c;
+      --o1:#184f95; --o2:#256abf; --o3:#3987e5; --o4:#6da7ec; --o5:#b7d3f6;
+      --on1:#ffffff; --on2:#ffffff; --on3:#0b0b0b; --on4:#0b0b0b; --on5:#0b0b0b;
+      --water:#22505a; --water-line:#79bdc7;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --plane:#0d0d0d; --surface:#1a1a19;
+    --ink:#ffffff; --ink-2:#c3c2b7; --muted:#898781;
+    --grid:#2c2c2a; --axis:#383835; --ring:rgba(255,255,255,0.10);
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70; --mark:#a494f2;
+    --up:#0ca30c;
+    --o1:#184f95; --o2:#256abf; --o3:#3987e5; --o4:#6da7ec; --o5:#b7d3f6;
+    --on1:#ffffff; --on2:#ffffff; --on3:#0b0b0b; --on4:#0b0b0b; --on5:#0b0b0b;
+    --water:#22505a; --water-line:#79bdc7;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin:0; background:var(--plane); color:var(--ink);
+    font:15px/1.6 var(--sans);
+    -webkit-font-smoothing:antialiased;
+  }
+  svg text { font-family:var(--sans); }
+  .wrap { max-width:1120px; margin:0 auto; padding:40px 24px 72px; }
+
+  header.top {
+    margin-bottom:36px; padding-bottom:22px;
+    border-bottom:1px solid var(--axis);
+  }
+  h1 {
+    font-family:var(--serif); font-weight:600; font-size:38px; line-height:1.1;
+    margin:0 0 10px; letter-spacing:-0.015em; text-wrap:balance;
+  }
+  .sub { color:var(--ink-2); font-size:14.5px; margin:0; max-width:62ch; }
+  .sub a { color:var(--s1); text-decoration:none; }
+  .sub a:hover { text-decoration:underline; }
+
+  h2 {
+    font-family:var(--serif); font-weight:600; font-size:22px; line-height:1.25;
+    color:var(--ink); margin:0 0 6px; letter-spacing:-0.01em; text-wrap:balance;
+  }
+  .lede { color:var(--ink-2); font-size:14px; margin:0 0 18px; max-width:66ch; }
+
+  section { margin-top:52px; }
+  .card {
+    background:var(--surface); border:1px solid var(--ring);
+    border-radius:12px; padding:20px 22px 16px;
+  }
+
+  /* stat tiles */
+  .tiles { display:grid; gap:12px; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); }
+  .tile { background:var(--surface); border:1px solid var(--ring);
+          border-radius:12px; padding:16px 18px 15px; }
+  .tile .k { font-size:11px; text-transform:uppercase; letter-spacing:0.08em;
+             color:var(--muted); font-weight:600; }
+  .tile .v { font-size:36px; line-height:1.1; margin:6px 0 3px; letter-spacing:-0.025em;
+             font-weight:500; }
+  .tile .v small { font-size:15px; color:var(--ink-2); letter-spacing:0; }
+  .tile .m { font-size:13px; color:var(--ink-2); }
+  .delta { font-weight:600; }
+  .delta.up { color:var(--up); }
+  .delta.down { color:var(--critical); }
+  .delta.flat { color:var(--muted); }
+
+  /* charts */
+  figure { margin:0; }
+  figcaption { font-size:13px; color:var(--ink-2); margin-top:10px; }
+  .chart { position:relative; width:100%; }
+  .chart svg { display:block; width:100%; height:auto; overflow:visible; }
+  .gridline { stroke:var(--grid); stroke-width:1; }
+  .axisline { stroke:var(--axis); stroke-width:1; }
+  .tick { fill:var(--muted); font-size:11.5px; font-variant-numeric:tabular-nums; }
+  .ann { fill:var(--muted); font-size:11.5px; }
+  .dlabel { font-size:12px; font-weight:600; }
+  /* the rule marking the move to St Francis only — an annotation, not a series */
+  .marker { stroke:var(--mark); stroke-width:1.5; stroke-dasharray:5 4; }
+  .mlabel { fill:var(--mark); font-size:11.5px; font-weight:600;
+            paint-order:stroke; stroke:var(--surface); stroke-width:3px;
+            stroke-linejoin:round; }
+
+  /* segmented control for the year-against-year chart */
+  .controls { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between;
+              gap:12px 20px; margin-bottom:14px; }
+  .seg { display:inline-flex; border:1px solid var(--ring); border-radius:8px;
+         overflow:hidden; background:var(--plane); }
+  .segbtn { font:500 12.5px var(--sans); color:var(--ink-2); background:none; border:0;
+            padding:6px 13px; cursor:pointer; white-space:nowrap; }
+  .segbtn + .segbtn { border-left:1px solid var(--ring); }
+  .segbtn:hover { color:var(--ink); }
+  .segbtn[aria-pressed="true"] { background:var(--s1); color:#fff; }
+  .segbtn:focus-visible { outline:2px solid var(--s1); outline-offset:-2px; }
+
+  /* the page-wide control over the trailing statistic */
+  .toolbar {
+    display:flex; flex-wrap:wrap; align-items:center; gap:10px 14px;
+    background:var(--surface); border:1px solid var(--ring);
+    border-radius:12px; padding:12px 16px; margin-bottom:4px;
+  }
+  .toolbar .tlabel { font-size:11px; text-transform:uppercase; letter-spacing:0.08em;
+                     color:var(--muted); font-weight:600; }
+  .toolbar .grp { display:flex; align-items:center; gap:7px; }
+  .toolbar .unit { font-size:13px; color:var(--ink-2); }
+  .toolbar .tnote { flex:1 1 26ch; min-width:0; margin:0; font-size:13px; color:var(--ink-2); }
+  .toolbar + .toolbar { margin-top:10px; }
+  .numfield {
+    font:500 13px var(--sans); color:var(--ink); background:var(--plane);
+    border:1px solid var(--axis); border-radius:7px; padding:5px 8px; width:5.5em;
+    font-variant-numeric:tabular-nums;
+  }
+  .numfield:focus-visible { outline:2px solid var(--s1); outline-offset:1px; }
+  @media (max-width:560px) { .toolbar .tnote { flex-basis:100%; } }
+
+  /* top ten */
+  td.rank { color:var(--muted); font-variant-numeric:tabular-nums; width:1%; }
+  td.why { color:var(--ink-2); }
+  .meter { display:inline-block; vertical-align:middle; width:74px; height:7px;
+           border-radius:4px; background:var(--grid); margin-right:10px; overflow:hidden; }
+  .meter span { display:block; height:100%; border-radius:4px; background:var(--s1); }
+  .mval { font-variant-numeric:tabular-nums; font-weight:600; }
+  #t-top td, #t-top th { padding:9px 10px; }
+
+  .legend { display:flex; flex-wrap:wrap; gap:6px 16px; margin:0 0 14px; padding:0; list-style:none; }
+  .controls .legend { margin:0; }
+  .legend li { display:flex; align-items:center; gap:7px; font-size:13px; color:var(--ink-2); }
+  .swatch { width:14px; height:3px; border-radius:2px; flex:none; }
+  .swatch.dot { width:9px; height:9px; border-radius:50%; }
+  .swatch.ring { background:none; border:2px solid currentColor; box-sizing:border-box; }
+  .swatch.dash { background:none;
+                 background-image:repeating-linear-gradient(90deg,currentColor 0 4px,transparent 4px 7px); }
+
+  .tip {
+    position:absolute; pointer-events:none; opacity:0; transition:opacity .1s;
+    background:var(--surface); border:1px solid var(--ring); border-radius:9px;
+    padding:9px 11px; font-size:13px; min-width:150px; z-index:5;
+    box-shadow:0 6px 20px rgba(0,0,0,.13);
+  }
+  .tip b { display:block; font-size:12.5px; color:var(--ink-2); font-weight:600; margin-bottom:5px; }
+  .tip .r { display:flex; align-items:center; gap:7px; justify-content:space-between; }
+  .tip .r span:last-child { font-variant-numeric:tabular-nums; font-weight:600; }
+  .tip .n { margin-top:6px; color:var(--ink-2); font-size:12px; font-style:italic;
+            max-width:210px; white-space:normal; }
+
+  /* the map — ZIP code areas filled from the ordinal ramp. Text on a filled
+     area needs a companion colour rather than the page's ink, because the ramp
+     runs light to dark in one theme and dark to light in the other. */
+  .maprow { display:flex; flex-wrap:wrap; gap:8px 10px; }
+  /* Counties are the frame the shading is read against, so their lines are
+     drawn over it rather than buried under it, and a casing in the card's own
+     colour lifts each one clear of whatever step of the ramp it crosses. */
+  .countycase { fill:none; stroke:var(--surface); stroke-width:3.6; stroke-opacity:.8;
+                stroke-linejoin:round; }
+  .countyline { fill:none; stroke:var(--ink-2); stroke-width:1.5; stroke-linejoin:round; }
+  .countylabel { fill:var(--ink-2); font-size:10.5px; font-weight:600; letter-spacing:.07em;
+                 text-transform:uppercase; text-anchor:middle; pointer-events:none;
+                 paint-order:stroke; stroke:var(--surface); stroke-width:3px;
+                 stroke-linejoin:round; }
+  /* The river is a landmark rather than a quantity, so it is drawn over the
+     shading too — in water, which is not a colour the ramp uses. */
+  .water { fill:var(--water); stroke:var(--water-line); stroke-width:1.1;
+           stroke-linejoin:round; }
+  .waterlabel { fill:var(--water-line); font-size:11px; font-weight:600; font-style:italic;
+                text-anchor:middle; pointer-events:none; paint-order:stroke;
+                stroke:var(--surface); stroke-width:3px; stroke-linejoin:round; }
+  /* The metro area is one boundary among the counties now rather than the
+     map's subject, so it is the faintest line on it. */
+  .msaline { fill:none; stroke:var(--muted); stroke-width:1; stroke-opacity:.5;
+             stroke-dasharray:3 5; }
+  .zone { stroke:var(--surface); stroke-width:0.7; }
+  .zone.on { stroke:var(--ink); stroke-width:1.6; }
+  .zlabel { font-size:11.5px; font-weight:600; text-anchor:middle; pointer-events:none;
+            paint-order:stroke; stroke-width:2.6px; stroke-linejoin:round; }
+  .zlabel .zc { font-size:9.5px; font-weight:500; }
+  .cdot { fill:var(--mark); stroke:var(--surface); stroke-width:2; }
+  /* The church is a place rather than a quantity, so it is not another dot.
+     It carries the colour the drive times are quoted in. */
+  .churchmark { fill:var(--s2); stroke:var(--surface); stroke-width:1.6;
+                stroke-linejoin:round; }
+  .clabel { fill:var(--s2); font-size:11.5px; font-weight:600;
+            paint-order:stroke; stroke:var(--surface); stroke-width:3px;
+            stroke-linejoin:round; }
+  #drive-tiles:not(:empty) { margin-bottom:18px; }
+  /* the rule at the weighted median on the drive-time histogram — an
+     annotation on one chart, in the ink of the words rather than a series */
+  .medrule { stroke:var(--ink-2); stroke-width:1.5; stroke-dasharray:5 4; }
+  .medlabel { fill:var(--ink-2); font-size:11.5px; font-weight:600;
+              paint-order:stroke; stroke:var(--surface); stroke-width:3px;
+              stroke-linejoin:round; }
+  .swatch.box { width:13px; height:13px; border-radius:3px; }
+  .mapempty { fill:var(--muted); font-size:13.5px; text-anchor:middle; }
+
+  /* tables */
+  details { margin-top:14px; }
+  summary { cursor:pointer; font-size:13.5px; color:var(--s1); }
+  table { border-collapse:collapse; width:100%; font-size:13.5px; margin-top:12px; }
+  th, td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--grid); }
+  th { color:var(--muted); font-size:11.5px; text-transform:uppercase;
+       letter-spacing:0.06em; font-weight:600; }
+  td.n, th.n { text-align:right; font-variant-numeric:tabular-nums; }
+  .scroll { overflow-x:auto; max-height:460px; overflow-y:auto; }
+
+  /* fix list — an errata register: severity reads from the stripe, not the hue alone */
+  .fixgroup { margin-top:26px; }
+  .fixgroup:first-child { margin-top:4px; }
+  .fixgroup h3 {
+    font-family:var(--serif); font-weight:600; font-size:16.5px; margin:0 0 3px;
+    display:flex; align-items:center; gap:9px;
+  }
+  .fixgroup p { font-size:13px; color:var(--ink-2); margin:0 0 10px; max-width:64ch; }
+  .fix { display:flex; gap:11px; padding:10px 0 10px 12px;
+         border-left:3px solid var(--sev); border-bottom:1px solid var(--grid); }
+  .fix:last-child { border-bottom:0; }
+  .fix .icon { flex:none; width:15px; text-align:center; font-size:13px;
+               font-weight:600; color:var(--sev); line-height:1.65; }
+  .fix .body { flex:1; min-width:0; }
+  .fix .where { font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; }
+  .fix .what { font-size:13.5px; }
+  .pill { display:inline-block; font-size:11px; font-weight:600; padding:2px 8px;
+          border-radius:999px; border:1px solid var(--ring); color:var(--ink-2);
+          font-variant-numeric:tabular-nums; }
+
+  /* the state of the read from the spreadsheet */
+  .status {
+    display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+    font-size:13.5px; color:var(--ink-2); background:var(--surface);
+    border:1px solid var(--ring); border-left:3px solid var(--s1);
+    border-radius:8px; padding:10px 14px; margin-bottom:22px;
+  }
+  .status.err { border-left-color:var(--critical); }
+  .status .spin {
+    width:12px; height:12px; flex:none; border-radius:50%;
+    border:2px solid var(--grid); border-top-color:var(--s1);
+    animation:spin .7s linear infinite;
+  }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .status .spin { animation-duration:2.4s; } }
+  .status button {
+    font:500 12.5px var(--sans); color:var(--ink); background:var(--plane);
+    border:1px solid var(--axis); border-radius:7px; padding:4px 11px; cursor:pointer;
+  }
+  .status button:hover { border-color:var(--ink-2); }
+
+  .note { font-size:13px; color:var(--ink-2); background:var(--surface);
+          border:1px solid var(--ring); border-left:3px solid var(--s2);
+          border-radius:8px; padding:11px 14px; margin-top:14px; }
+
+  .grid2 { display:grid; gap:16px; grid-template-columns:repeat(auto-fit,minmax(330px,1fr)); }
+  @media (max-width:640px) { .wrap { padding:24px 14px 48px; } h1 { font-size:26px; } }
+  /* the meter is a nicety; on a narrow screen the columns need the room */
+  @media (max-width:600px) {
+    .meter { display:none; }
+    #t-top td, #t-top th { padding:8px 6px; font-size:12.5px; }
+    #t-top td:nth-child(2) { white-space:nowrap; }
+  }
+</style>
+
+
+<div class="wrap">
+  <header class="top">
+    <h1>Parish Attendance</h1>
+    <p class="sub" id="subtitle"></p>
+  </header>
+
+  <div class="toolbar" id="trailbar" hidden>
+    <span class="tlabel">Trailing statistic</span>
+    <div class="grp">
+      <div class="seg" id="seg-window" role="group" aria-label="Trailing window, in Sundays"></div>
+      <span class="unit">Sundays</span>
+    </div>
+    <div class="seg" id="seg-stat" role="group" aria-label="Median or mean"></div>
+    <p class="tnote" id="trail-note"></p>
+  </div>
+
+  <div class="toolbar" id="offsetbar" hidden>
+    <span class="tlabel">Two-site overlap</span>
+    <div class="grp">
+      <span class="unit">Subtract</span>
+      <input class="numfield" id="offset" type="number" min="0" max="999" step="1"
+             inputmode="numeric"
+             aria-label="Attendance to subtract from every Sunday before September 3, 2023">
+      <span class="unit" id="offset-unit"></span>
+    </div>
+    <p class="tnote" id="offset-note"></p>
+  </div>
+
+  <section id="tiles-sec">
+    <h2>Where things stand</h2>
+    <div class="tiles" id="tiles"></div>
+  </section>
+
+  <section>
+    <h2>Sunday attendance, every week on record</h2>
+    <p class="lede" id="lede-main"></p>
+    <div class="card">
+      <figure>
+        <ul class="legend" id="lg-main"></ul>
+        <div class="chart" id="c-main"></div>
+        <figcaption id="cap-main"></figcaption>
+      </figure>
+    </div>
+    <details>
+      <summary>Show every Sunday as a table</summary>
+      <div class="scroll"><table id="t-sundays"></table></div>
+    </details>
+  </section>
+
+  <section>
+    <h2>Year against year</h2>
+    <p class="lede" id="lede-woy"></p>
+    <div class="card">
+      <figure>
+        <div class="controls">
+          <div class="seg" id="seg-woy" role="group" aria-label="Series to plot"></div>
+          <ul class="legend" id="lg-woy"></ul>
+        </div>
+        <div class="chart" id="c-woy"></div>
+        <figcaption id="cap-woy"></figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section>
+    <h2>The ten best Sundays</h2>
+    <p class="lede" id="lede-top"></p>
+    <div class="card"><table id="t-top"></table></div>
+  </section>
+
+  <section>
+    <h2>Year by year</h2>
+    <div class="grid2">
+      <div class="card">
+        <figure>
+          <ul class="legend" id="lg-year"></ul>
+          <div class="chart" id="c-year"></div>
+          <figcaption id="cap-year"></figcaption>
+        </figure>
+      </div>
+      <div class="card">
+        <figure>
+          <ul class="legend" id="lg-month"></ul>
+          <div class="chart" id="c-month"></div>
+          <figcaption>Median Sunday attendance by calendar month, all years pooled.</figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <section id="places-sec" hidden>
+    <h2>Where the families live</h2>
+    <p class="lede" id="lede-map"></p>
+    <div class="tiles" id="drive-tiles"></div>
+    <div class="card" id="map-card">
+      <figure>
+        <div class="controls">
+          <div class="maprow">
+            <div class="seg" id="seg-weight" role="group" aria-label="Colour the map by people or by families"></div>
+            <div class="seg" id="seg-extent" role="group" aria-label="Which ZIP codes to show"></div>
+          </div>
+          <ul class="legend" id="lg-map"></ul>
+        </div>
+        <div class="chart" id="c-map"></div>
+        <figcaption id="cap-map"></figcaption>
+      </figure>
+    </div>
+    <div class="card" id="hist-card" hidden>
+      <figure>
+        <ul class="legend" id="lg-drive"></ul>
+        <div class="chart" id="c-drive"></div>
+        <figcaption id="cap-drive"></figcaption>
+      </figure>
+    </div>
+    <details id="zips-details">
+      <summary>Show every ZIP code as a table</summary>
+      <div class="scroll"><table id="t-zips"></table></div>
+    </details>
+    <div class="note" id="mapnote"></div>
+  </section>
+
+  <section>
+    <h2>What the record does and does not cover</h2>
+    <p class="lede" id="lede-fix"></p>
+    <div class="card" id="fixlist"></div>
+    <div class="note" id="fixnote"></div>
+  </section>
+</div>
+
+<script>
+/* The payload — read from the sheet as the page loads — and the few views of
+   it the whole page shares. All are set by renderDashboard(), which is the
+   single entry point for drawing the page. */
+let DATA, S, counted, scored, dated, YEAR_COLOR;
+
+/* Sept 3, 2023: the first Sunday at St Francis alone. Before it the parish met
+   at St Martin's as well, and part of the congregation was counted at both, so
+   OFFSET — the reader's, and applied nowhere but here — comes off every Sunday
+   before the date. Both time charts carry a rule at it, so the step in the
+   record is something the reader sees rather than has to know. */
+const SWITCH = {
+  date: "2023-09-03",
+  year: "2023",
+  short: "Sep 2023 · St Francis only",
+  what: "the parish left St Martin's and kept St Francis only",
+};
+/* The metro area the map's second selector cuts to, as the Census knows it:
+   change the code and the label and the selector, the legend, the caption and
+   the table column all follow. */
+const MSA = { geoid: "31140", label: "Louisville MSA", long: "Louisville/Jefferson County, KY-IN" };
+
+/* The river the metro is built on, as the Census's hydrography names it. It is
+   drawn as a landmark: the one piece of ground on the map that is not a
+   boundary, and the thing a reader places the parish against before any of the
+   lines. A parish on another river changes the name and the label here. */
+const RIVER = { name: "Ohio Riv", label: "Ohio River" };
+
+/* The church every drive time on the page is measured to. The address is the
+   parish's; the point is what the Census Bureau's own geocoder returns for it,
+   and it is written here rather than looked up on load because it is
+   configuration and not data — a router needs a coordinate rather than a
+   street, and the parish does not move between refreshes. Move the parish and
+   this is the one thing to change: the map's marker, the tiles, the table
+   column and every sentence around them read from it. */
+const CHURCH = {
+  address: "1960 Bardstown Road, Louisville, KY 40205",
+  short: "1960 Bardstown Road",
+  lat: 38.226268, lon: -85.697765,
+};
+
+const OFFSET_DEFAULT = 5;
+const OFFSET_STORE = "parish-attendance-offset";
+let OFFSET = OFFSET_DEFAULT;
+
+/* The trailing statistic the page is currently drawn with. Every trailing
+   figure — the line on the first chart, the tile, the second series on year
+   against year, and the table column — reads from here, so the four windows
+   and the two measures are one choice rather than four charts' worth. The
+   series themselves are all computed up front, in payloadFrom(). */
+const TRAIL_WINDOWS = [52, 26, 12, 6];
+const TRAIL_STATS = [
+  { key: "median", label: "Median", noun: "median", fn: (xs) => median(xs) },
+  { key: "mean", label: "Mean", noun: "mean", fn: (xs) => mean1(xs) },
+];
+// What a reader who has expressed no preference is shown.
+const TRAIL = { window: 12, stat: "mean" };
+const TRAIL_STORE = "parish-attendance-trailing";
+
+const trailStat = () => TRAIL_STATS.find((s) => s.key === TRAIL.stat);
+const trailOf = (r) => (r.trail ? r.trail[TRAIL.stat + TRAIL.window] : null);
+const trailLabel = () => `${TRAIL.window}-Sunday trailing ${trailStat().noun}`;
+// Medians land on a half and means on a tenth; whole numbers stay whole.
+const fmtTrail = (v) => num(v, v == null || Number.isInteger(v) ? 0 : 1);
+
+/* The page re-reads the sheet on every load, so without this a refresh would
+   throw the reader's choice away several times an hour. */
+function restoreTrail() {
+  try {
+    const v = JSON.parse(localStorage.getItem(TRAIL_STORE) || "null");
+    if (v && TRAIL_WINDOWS.includes(v.window) && TRAIL_STATS.some((s) => s.key === v.stat))
+      Object.assign(TRAIL, { window: v.window, stat: v.stat });
+  } catch (_) { /* private mode, or a browser that refuses storage */ }
+}
+
+function restoreOffset() {
+  try {
+    const v = JSON.parse(localStorage.getItem(OFFSET_STORE) || "null");
+    if (typeof v === "number" && isFinite(v) && v >= 0) OFFSET = Math.round(v);
+  } catch (_) { /* private mode, or a browser that refuses storage */ }
+}
+
+const NS = "http://www.w3.org/2000/svg";
+const $ = (id) => document.getElementById(id);
+
+function svgEl(tag, attrs, parent) {
+  const n = document.createElementNS(NS, tag);
+  for (const k in attrs) if (attrs[k] != null) n.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(n);
+  return n;
+}
+function htmlEl(tag, cls, parent, text) {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (text != null) n.textContent = text;
+  if (parent) parent.appendChild(n);
+  return n;
+}
+const num = (n, d = 0) =>
+  n == null ? "—" : n.toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
+const day = (iso) => new Date(iso + "T12:00:00");
+const fmtDate = (iso, opts) =>
+  day(iso).toLocaleDateString("en-US", opts || { month: "short", day: "numeric", year: "numeric" });
+
+/** Round tick values that span [lo,hi] in roughly `count` steps. */
+function ticks(lo, hi, count) {
+  const raw = (hi - lo) / Math.max(1, count);
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => s >= raw) || 10 * mag;
+  const out = [];
+  for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) out.push(+v.toFixed(6));
+  return out;
+}
+
+/** Re-render a chart whenever its container changes width, at true pixel size.
+    Mounting the same container again replaces what was there — its observer
+    included — so a chart can be redrawn with a new series without stacking up
+    observers behind it. */
+function mount(container, render) {
+  let last = 0;
+  const draw = (force) => {
+    const w = container.clientWidth;
+    if (!w || (!force && Math.abs(w - last) < 1)) return;
+    last = w;
+    container.querySelectorAll("svg, .tip").forEach((n) => n.remove());
+    render(container, w);
+  };
+  if (container._ro) container._ro.disconnect();
+  container._ro = new ResizeObserver(() => draw(false));
+  container._ro.observe(container);
+  draw(true);
+}
+
+/** Bar path with only the data-end rounded; the base stays flat on the axis. */
+function barPath(x, y, w, h, r, dir) {
+  r = Math.max(0, Math.min(r, w / 2, h));
+  if (dir === "up")
+    return `M${x} ${y + h}L${x} ${y + r}Q${x} ${y} ${x + r} ${y}L${x + w - r} ${y}`
+         + `Q${x + w} ${y} ${x + w} ${y + r}L${x + w} ${y + h}Z`;
+  return `M${x} ${y}L${x + w - r} ${y}Q${x + w} ${y} ${x + w} ${y + r}`
+       + `L${x + w} ${y + h - r}Q${x + w} ${y + h} ${x + w - r} ${y + h}L${x} ${y + h}Z`;
+}
+
+function legend(ul, items) {
+  ul.innerHTML = "";
+  for (const it of items) {
+    const li = htmlEl("li", null, ul);
+    const sw = htmlEl("span", "swatch" + (it.dot || it.ring ? " dot" : "") +
+                       (it.box ? " box" : ""), li);
+    if (it.ring) { sw.style.borderColor = it.color; sw.classList.add("ring"); }
+    else if (it.dash) { sw.classList.add("dash"); sw.style.color = it.color; }
+    else sw.style.background = it.color;
+    htmlEl("span", null, li, it.label);
+  }
+}
+
+/** A segmented control, rebuilt from scratch each time the state behind it
+    changes. `items`: {label, on, pick, aria}. */
+function segmented(el, items) {
+  el.innerHTML = "";
+  for (const it of items) {
+    const b = htmlEl("button", "segbtn", el, it.label);
+    b.type = "button";
+    b.setAttribute("aria-pressed", String(!!it.on));
+    if (it.aria) b.setAttribute("aria-label", it.aria);
+    b.addEventListener("click", it.pick);
+  }
+}
+
+/** The dashed rule marking the Sunday the parish moved to St Francis only.
+    Both time charts draw it, so it is one rule and one colour. It goes down
+    before the data, so it annotates the series rather than interrupting them,
+    and its label goes on last, so no line can be drawn through the words. */
+function switchRule(svg, px, top, bottom) {
+  svgEl("line", { x1: px, x2: px, y1: top, y2: bottom, class: "marker" }, svg);
+}
+
+function switchLabel(svg, px, top, right, W) {
+  const text = W >= 560 ? SWITCH.short : "St Francis only";
+  const anchor = right - px < 170 ? "end" : "start";
+  svgEl("text", { x: px + (anchor === "end" ? -7 : 7), y: top + 11, class: "mlabel",
+    "text-anchor": anchor }, svg).textContent = text;
+}
+
+/** Whether the record actually straddles the move — it does, but a sheet that
+    started later should not be given a rule off the end of its axis. */
+const switchInRange = () =>
+  dated.length > 0 && dated[0].date <= SWITCH.date &&
+  dated[dated.length - 1].date >= SWITCH.date;
+
+function tooltip(container) {
+  const t = htmlEl("div", "tip", container);
+  return {
+    show(x, y, html) {
+      t.innerHTML = html;
+      t.style.opacity = 1;
+      const w = t.offsetWidth, cw = container.clientWidth;
+      t.style.left = Math.max(4, Math.min(cw - w - 4, x - w / 2)) + "px";
+      t.style.top = Math.max(0, y - t.offsetHeight - 14) + "px";
+    },
+    hide() { t.style.opacity = 0; },
+  };
+}
+
+
+/* ---------------------------------------------------------------- main series */
+
+function drawMain(container, W) {
+  const rows = dated;
+  const H = Math.max(260, Math.min(380, W * 0.36));
+  const M = { l: 40, r: W < 560 ? 14 : 52, t: 14, b: 30 };
+  const iw = W - M.l - M.r, ih = H - M.t - M.b;
+  const svg = svgEl("svg", { width: W, height: H, role: "img",
+    "aria-label": `Sunday attendance over time with a ${trailLabel()}` }, container);
+
+  const t0 = day(rows[0].date).getTime(), t1 = day(rows[rows.length - 1].date).getTime();
+  const hi = Math.max(...rows.map((r) => r.attendance || 0)) * 1.08;
+  const x = (iso) => M.l + ((day(iso).getTime() - t0) / (t1 - t0)) * iw;
+  const y = (v) => M.t + ih - (v / hi) * ih;
+
+  for (const v of ticks(0, hi, 5)) {
+    svgEl("line", { x1: M.l, x2: M.l + iw, y1: y(v), y2: y(v), class: "gridline" }, svg);
+    svgEl("text", { x: M.l - 8, y: y(v) + 4, class: "tick", "text-anchor": "end" }, svg).textContent = v;
+  }
+
+  const yr0 = day(rows[0].date).getFullYear(), yr1 = day(rows[rows.length - 1].date).getFullYear();
+  for (let yr = yr0 + 1; yr <= yr1; yr++) {
+    const px = x(yr + "-01-01");
+    svgEl("line", { x1: px, x2: px, y1: M.t, y2: M.t + ih, class: "gridline" }, svg);
+    svgEl("text", { x: px, y: H - 10, class: "tick", "text-anchor": "middle" }, svg).textContent = yr;
+  }
+  svgEl("line", { x1: M.l, x2: M.l + iw, y1: M.t + ih, y2: M.t + ih, class: "axisline" }, svg);
+
+  const marked = switchInRange();
+  if (marked) switchRule(svg, x(SWITCH.date), M.t, M.t + ih);
+
+  // Break each line wherever a Sunday has no count, rather than bridging the gap.
+  const path = (get, color, width, opacity) => {
+    let d = "", pen = false;
+    for (const r of rows) {
+      const v = get(r);
+      if (v == null) { pen = false; continue; }
+      d += (pen ? "L" : "M") + x(r.date).toFixed(1) + " " + y(v).toFixed(1) + " ";
+      pen = true;
+    }
+    svgEl("path", { d, fill: "none", stroke: color, "stroke-width": width,
+      "stroke-opacity": opacity, "stroke-linejoin": "round", "stroke-linecap": "round" }, svg);
+  };
+  path((r) => r.attendance, "var(--muted)", 1.4, 0.75);
+  path(trailOf, "var(--s1)", 2.5, 1);
+
+  // Sundays the sheet holds out of the statistics: still plotted, but ringed so
+  // it is obvious why the trailing line does not follow them down.
+  for (const r of rows) {
+    if (!r.excluded || r.attendance == null) continue;
+    svgEl("circle", { cx: x(r.date), cy: y(r.attendance), r: 4, fill: "var(--surface)",
+      stroke: "var(--s2)", "stroke-width": 2 }, svg);
+  }
+
+  if (marked) switchLabel(svg, x(SWITCH.date), M.t, M.l + iw, W);
+
+  if (W >= 560) {
+    const end = [...rows].reverse().find((r) => trailOf(r) != null);
+    if (end)
+      svgEl("text", { x: M.l + iw + 8, y: y(trailOf(end)) + 4, class: "dlabel",
+        fill: "var(--s1)" }, svg).textContent = fmtTrail(trailOf(end));
+  }
+
+  const tip = tooltip(container);
+  const cross = svgEl("line", { y1: M.t, y2: M.t + ih, class: "axisline", opacity: 0 }, svg);
+  const dot = svgEl("circle", { r: 5, fill: "var(--muted)", stroke: "var(--surface)",
+    "stroke-width": 2, opacity: 0 }, svg);
+
+  svgEl("rect", { x: M.l, y: M.t, width: iw, height: ih, fill: "transparent" }, svg)
+    .addEventListener("pointermove", (ev) => {
+      const px = ev.clientX - svg.getBoundingClientRect().left;
+      let best = rows[0], bd = Infinity;
+      for (const r of rows) {
+        const d = Math.abs(x(r.date) - px);
+        if (d < bd) { bd = d; best = r; }
+      }
+      cross.setAttribute("x1", x(best.date));
+      cross.setAttribute("x2", x(best.date));
+      cross.setAttribute("opacity", 1);
+      if (best.attendance != null) {
+        dot.setAttribute("cx", x(best.date));
+        dot.setAttribute("cy", y(best.attendance));
+        dot.setAttribute("opacity", 1);
+      } else dot.setAttribute("opacity", 0);
+      tip.show(x(best.date), y(best.attendance ?? trailOf(best) ?? hi / 2),
+        `<b>${fmtDate(best.date)}</b>` +
+        (best.attendance == null
+          ? `<div class="r"><span>Attendance</span><span>not recorded</span></div>`
+          : swatchRow("Attendance", "var(--muted)", best.attendance)) +
+        swatchRow(trailLabel(), "var(--s1)", trailOf(best), true) +
+        (best.note ? `<div class="n">“${best.note}”</div>` : "") +
+        (best.excluded ? `<div class="n">Held out of the statistics — ${best.excluded}</div>` : "") +
+        (best.adjusted
+          ? `<div class="n">Two sites — the sheet says ${num(best.raw)}, less ${best.adjusted}` +
+            ` for the overlap</div>`
+          : ""));
+    });
+  svg.addEventListener("pointerleave", () => {
+    tip.hide(); cross.setAttribute("opacity", 0); dot.setAttribute("opacity", 0);
+  });
+}
+
+/* ------------------------------------------------------- year against year */
+
+/** Attendance replotted with every year on a shared week-of-year axis. */
+function drawWeekOfYear(container, W, years) {
+  const H = Math.max(280, Math.min(400, W * 0.4));
+  const M = { l: 40, r: W < 560 ? 16 : 46, t: 14, b: 34 };
+  const iw = W - M.l - M.r, ih = H - M.t - M.b;
+  const svg = svgEl("svg", { width: W, height: H, role: "img",
+    "aria-label": "Attendance by week of the year, one line per year" }, container);
+
+  const hi = Math.max(...years.flatMap((g) => g.points.map((p) => p.v))) * 1.08 || 1;
+  const x = (w) => M.l + ((w - 1) / 52) * iw;
+  const y = (v) => M.t + ih - (v / hi) * ih;
+
+  for (const v of ticks(0, hi, 5)) {
+    svgEl("line", { x1: M.l, x2: M.l + iw, y1: y(v), y2: y(v), class: "gridline" }, svg);
+    svgEl("text", { x: M.l - 8, y: y(v) + 4, class: "tick", "text-anchor": "end" }, svg).textContent = v;
+  }
+  for (const w of [1, 10, 20, 30, 40, 50]) {
+    svgEl("line", { x1: x(w), x2: x(w), y1: M.t, y2: M.t + ih, class: "gridline" }, svg);
+    svgEl("text", { x: x(w), y: H - 16, class: "tick", "text-anchor": "middle" }, svg)
+      .textContent = "wk " + w;
+    svgEl("text", { x: x(w), y: H - 4, class: "tick", "text-anchor": "middle",
+      "font-size": 10.5, opacity: 0.75 }, svg).textContent = MONTH_AT_WEEK[w];
+  }
+  svgEl("line", { x1: M.l, x2: M.l + iw, y1: M.t + ih, y2: M.t + ih, class: "axisline" }, svg);
+
+  // The move falls in the week the rule sits on, so only that year's line
+  // crosses it: the years to its left are two sites, the ones to its right one.
+  const swWeek = weekOfYear(SWITCH.date), marked = switchInRange();
+  if (marked) switchRule(svg, x(swWeek), M.t, M.t + ih);
+
+  for (const g of years) {
+    let d = "", pen = false;
+    for (const p of g.points) {
+      d += (pen ? "L" : "M") + x(p.week).toFixed(1) + " " + y(p.v).toFixed(1) + " ";
+      pen = true;
+    }
+    svgEl("path", { d, fill: "none", stroke: g.color, "stroke-width": g.year === years[years.length - 1].year ? 2.75 : 2,
+      "stroke-linejoin": "round", "stroke-linecap": "round" }, svg);
+    const last = g.points[g.points.length - 1];
+    if (W >= 560 && last)
+      svgEl("text", { x: Math.min(x(last.week) + 7, M.l + iw + 6), y: y(last.v) + 4,
+        class: "dlabel", fill: g.color }, svg).textContent = g.year;
+  }
+
+  // The crossing itself, on the one line that has one.
+  const swYear = marked && years.find((g) => g.year === SWITCH.year);
+  const swPoint = swYear && swYear.points.find((p) => p.week === swWeek);
+  if (swPoint)
+    svgEl("circle", { cx: x(swPoint.week), cy: y(swPoint.v), r: 4.5, fill: "var(--mark)",
+      stroke: "var(--surface)", "stroke-width": 2 }, svg);
+  if (marked) switchLabel(svg, x(swWeek), M.t, M.l + iw, W);
+
+  const tip = tooltip(container);
+  const cross = svgEl("line", { y1: M.t, y2: M.t + ih, class: "axisline", opacity: 0 }, svg);
+  svgEl("rect", { x: M.l, y: M.t, width: iw, height: ih, fill: "transparent" }, svg)
+    .addEventListener("pointermove", (ev) => {
+      const px = ev.clientX - svg.getBoundingClientRect().left;
+      const w = Math.round(1 + ((px - M.l) / iw) * 52);
+      cross.setAttribute("x1", x(w)); cross.setAttribute("x2", x(w));
+      cross.setAttribute("opacity", 1);
+      const rows = years.map((g) => {
+        const p = g.points.find((q) => q.week === w);
+        return p ? swatchRow(g.year, g.color, p.v, true) : "";
+      }).reverse().join("");
+      tip.show(x(w), M.t + 10, `<b>Week ${w} &middot; ${MONTH_AT_WEEK[w] || ""}</b>` +
+        (rows || `<div class="r"><span>No Sunday recorded</span></div>`));
+    });
+  svg.addEventListener("pointerleave", () => { tip.hide(); cross.setAttribute("opacity", 0); });
+}
+/* ---------------------------------------------------------------- bar charts */
+
+/** Vertical bars, optionally stacked. `items`: {label, tick, segs:[{v,color,name}], note} */
+function drawBars(container, W, items, opts) {
+  const o = Object.assign({ height: 250, labelEvery: 1, valueLabels: true }, opts || {});
+  const H = o.height;
+  const M = { l: 38, r: 10, t: 16, b: 34 };
+  const iw = W - M.l - M.r, ih = H - M.t - M.b;
+  const svg = svgEl("svg", { width: W, height: H, role: "img", "aria-label": o.aria }, container);
+
+  const totals = items.map((it) => it.segs.reduce((a, s) => a + (s.v || 0), 0));
+  const hi = Math.max(...totals) * 1.12 || 1;
+  const y = (v) => M.t + ih - (v / hi) * ih;
+  const step = iw / items.length;
+  const bw = Math.max(2, Math.min(o.maxBar || 46, step - Math.max(2, step * 0.28)));
+
+  for (const v of ticks(0, hi, 4)) {
+    svgEl("line", { x1: M.l, x2: M.l + iw, y1: y(v), y2: y(v), class: "gridline" }, svg);
+    svgEl("text", { x: M.l - 8, y: y(v) + 4, class: "tick", "text-anchor": "end" }, svg).textContent = v;
+  }
+  svgEl("line", { x1: M.l, x2: M.l + iw, y1: M.t + ih, y2: M.t + ih, class: "axisline" }, svg);
+
+  const tip = tooltip(container);
+  items.forEach((it, i) => {
+    const cx = M.l + step * (i + 0.5);
+    let base = 0;
+    it.segs.forEach((s, si) => {
+      if (!s.v) return;
+      const top = y(base + s.v), bottom = y(base);
+      // 2px surface gap between stacked segments instead of a stroke.
+      const gap = si > 0 ? 2 : 0;
+      const h = Math.max(1, bottom - top - gap);
+      const isTop = si === it.segs.length - 1 || it.segs.slice(si + 1).every((z) => !z.v);
+      svgEl("path", { d: barPath(cx - bw / 2, top, bw, h, isTop ? 4 : 0, "up"),
+        fill: s.color }, svg);
+      base += s.v;
+    });
+    if (o.valueLabels && bw >= 20)
+      svgEl("text", { x: cx, y: y(totals[i]) - 7, class: "dlabel", "text-anchor": "middle",
+        fill: "var(--ink-2)" }, svg).textContent = num(totals[i]);
+    if (it.tick && i % o.labelEvery === 0)
+      svgEl("text", { x: cx, y: H - 11, class: "tick", "text-anchor": "middle" }, svg).textContent = it.tick;
+
+    svgEl("rect", { x: cx - step / 2, y: M.t, width: step, height: ih, fill: "transparent" }, svg)
+      .addEventListener("pointermove", () => {
+        const rows = it.segs.filter((s) => s.v).map((s) =>
+          `<div class="r"><span><span class="swatch" style="display:inline-block;background:${s.color}"></span> ${s.name}</span><span>${num(s.v)}</span></div>`).join("");
+        tip.show(cx, y(totals[i]), `<b>${it.label}</b>${rows}` +
+          (it.segs.length > 1 ? `<div class="r"><span>Total</span><span>${num(totals[i])}</span></div>` : "") +
+          (it.note ? `<div class="n">${it.note}</div>` : ""));
+      });
+  });
+  svg.addEventListener("pointerleave", tip.hide);
+}
+
+/** Horizontal bars for ranked categories with long names. */
+function drawHBars(container, W, items, opts) {
+  const o = Object.assign({ color: "var(--s1)" }, opts || {});
+  const labelW = Math.min(230, Math.max(120, W * 0.36));
+  const rowH = 26, M = { l: labelW, r: 46, t: 6, b: 6 };
+  const H = M.t + M.b + items.length * rowH;
+  const iw = W - M.l - M.r;
+  const svg = svgEl("svg", { width: W, height: H, role: "img", "aria-label": o.aria }, container);
+  const hi = Math.max(...items.map((d) => d.value)) || 1;
+  const tip = tooltip(container);
+
+  items.forEach((d, i) => {
+    const cy = M.t + i * rowH + rowH / 2;
+    const w = Math.max(2, (d.value / hi) * iw);
+    svgEl("path", { d: barPath(M.l, cy - 7, w, 14, 4, "right"), fill: o.color }, svg);
+    const label = svgEl("text", { x: M.l - 10, y: cy + 4, class: "tick", "text-anchor": "end" }, svg);
+    label.textContent = d.label.length > 30 ? d.label.slice(0, 29) + "…" : d.label;
+    svgEl("text", { x: M.l + w + 8, y: cy + 4, class: "dlabel", fill: "var(--ink-2)" }, svg)
+      .textContent = num(d.value);
+    svgEl("rect", { x: 0, y: cy - rowH / 2, width: W, height: rowH, fill: "transparent" }, svg)
+      .addEventListener("pointermove", () => tip.show(M.l + w / 2, cy - 4,
+        `<b>${d.label}</b><div class="r"><span>Attendance</span><span>${num(d.value)}</span></div>` +
+        (d.sub ? `<div class="n">${d.sub}</div>` : "")));
+  });
+  svg.addEventListener("pointerleave", tip.hide);
+}
+
+
+/* ---------------------------------------------------------------------- map */
+
+/* An equal-area-ish plate carree: longitude squeezed by the cosine of the
+   middle latitude, which over three degrees of Kentucky is a rectangle nobody
+   can tell from a projection. The scale is uniform, so the shapes are the
+   shapes. */
+function projector(b, W, H) {
+  const kx = Math.cos(((b.s + b.n) / 2) * Math.PI / 180);
+  const gw = (b.e - b.w) * kx, gh = b.n - b.s;
+  const k = Math.min(W / gw, H / gh);
+  const ox = (W - gw * k) / 2, oy = (H - gh * k) / 2;
+  return (lon, lat) => [ox + (lon - b.w) * kx * k, oy + (b.n - lat) * k];
+}
+
+/** A path for a whole geometry, and the box it lands in — the box is what
+    decides whether a label will fit inside the shape or be left to the hover. */
+function pathOf(g, P) {
+  let d = "", x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (const ring of ringsOf(g)) {
+    ring.forEach((pt, i) => {
+      const [x, y] = P(pt[0], pt[1]);
+      d += (i ? "L" : "M") + x.toFixed(1) + " " + y.toFixed(1);
+      if (x < x0) x0 = x;
+      if (x > x1) x1 = x;
+      if (y < y0) y0 = y;
+      if (y > y1) y1 = y;
+    });
+    d += "Z";
+  }
+  return { d, x0, x1, y0, y1, area: (x1 - x0) * (y1 - y0) };
+}
+
+/* Labels are written into the ZIP codes themselves, which on a map of ZIP
+   codes means most of them do not get one: a box has to fit inside its own
+   shape and clear of every box already down. The biggest areas are offered
+   first, each takes the ZIP code and the figure if both fit and the figure
+   alone if not, and what is left over is the hover and the table. */
+const boxIn = (r, b) => r.x0 >= b.x0 - 1 && r.x1 <= b.x1 + 1 &&
+                        r.y0 >= b.y0 - 1 && r.y1 <= b.y1 + 1;
+const boxHits = (r, taken) => taken.some((t) =>
+  r.x0 < t.x1 && r.x1 > t.x0 && r.y0 < t.y1 && r.y1 > t.y0);
+// Wide enough for the glyphs at the size the label is set in; measuring for
+// real would mean laying every candidate out and throwing most of them away.
+const textWidth = (str, px) => str.length * px * 0.62;
+const textBox = (cx, cy, wide, up, down) =>
+  ({ x0: cx - wide / 2 - 3, x1: cx + wide / 2 + 3, y0: cy - up, y1: cy + down });
+
+/** Up to five bins over the values on the map. Counts this small are mostly a
+    handful of distinct numbers, so each gets a step of its own where they fit.
+    Past that the bins cut the range of distinct values into five, rather than
+    the rows: households are a long tail of ones, and quintiles over the rows
+    would spend four steps on the ones and one on everything else. */
+function binsOf(values) {
+  const sorted = [...values].sort((a, b) => a - b);
+  const distinct = [...new Set(sorted)];
+  if (!distinct.length) return [];
+  if (distinct.length <= ORDINAL.length) return distinct.map((v) => [v, v]);
+  const edges = [];
+  for (let i = 1; i < ORDINAL.length; i++) {
+    const q = distinct[Math.floor((i * distinct.length) / ORDINAL.length)];
+    if (q > distinct[0] && !edges.includes(q)) edges.push(q);
+  }
+  const out = [];
+  let lo = sorted[0];
+  for (const e of edges) { out.push([lo, e - 1]); lo = e; }
+  out.push([lo, sorted[sorted.length - 1]]);
+  return out;
+}
+const binLabel = ([lo, hi]) => (lo === hi ? num(lo) : `${num(lo)}–${num(hi)}`);
+
+/** The scale the map is currently painted with: the bins, and the ramp cut so
+    that the top bin always lands on the strongest step. */
+function mapScale() {
+  const bins = binsOf(shownZips().map(mapWeight().of));
+  const from = ORDINAL.length - bins.length;
+  return {
+    bins,
+    fill: (v) => ORDINAL[from + bins.findIndex(([lo, hi]) => v >= lo && v <= hi)],
+    ink: (v) => ON_ORDINAL[from + bins.findIndex(([lo, hi]) => v >= lo && v <= hi)],
+    color: (i) => ORDINAL[from + i],
+  };
+}
+
+/** Where the middle of the parish is, weighted the way the map is coloured.
+    Only the ZIP codes on the map count toward it, so it moves with the metro
+    selector as well as with the weighting. */
+function weightedCentre(zips, weight) {
+  const total = zips.reduce((a, z) => a + weight.of(z), 0);
+  if (!total) return null;
+  return {
+    lat: zips.reduce((a, z) => a + z.lat * weight.of(z), 0) / total,
+    lon: zips.reduce((a, z) => a + z.lon * weight.of(z), 0) / total,
+    total,
+  };
+}
+
+const fmtLatLon = (c) =>
+  `${Math.abs(c.lat).toFixed(3)}° ${c.lat < 0 ? "S" : "N"}, ` +
+  `${Math.abs(c.lon).toFixed(3)}° ${c.lon < 0 ? "W" : "E"}`;
+
+/** Seconds as minutes: whole ones for a single ZIP code, where a tenth of a
+    minute is a precision the router does not have, and a tenth for an average
+    over the parish, where it is the difference between two of them. */
+const fmtMins = (secs, d = 0) => num(secs / 60, d);
+
+/** How long the parish is from the church, weighted the way the map is
+    coloured and over the ZIP codes the map is drawing — so it moves with both
+    selectors, as the weighted centre does. The median comes with the mean
+    because they answer different questions: one family three states away adds
+    an hour to a mean of thirty and moves a median not at all. A ZIP code the
+    router could not reach is left out of both, and counted so the page can say
+    so. */
+function averageDrive(zips, weight) {
+  const rows = zips.filter((z) => z.drive != null && weight.of(z) > 0)
+                   .sort((a, b) => a.drive - b.drive);
+  const total = rows.reduce((a, z) => a + weight.of(z), 0);
+  if (!total) return null;
+  // The weighted median: the drive of the ZIP code the middle household of the
+  // parish, ordered by how far it is from church, lives in.
+  let seen = 0, median = null;
+  for (const z of rows) {
+    seen += weight.of(z);
+    if (median == null && seen >= total / 2) median = z.drive;
+  }
+  return {
+    mean: rows.reduce((a, z) => a + z.drive * weight.of(z), 0) / total,
+    median,
+    farthest: rows[rows.length - 1],
+    total,
+    zips: rows.length,
+    missing: zips.filter((z) => z.drive == null).length,
+  };
+}
+
+/* Minutes to a step on the drive-time histogram. The first of these that puts
+   the range into a dozen bars or fewer is the one used, so a parish that is all
+   inside the metro area is read in five-minute steps and one spread over a
+   state is read in half-hours, without either being told what to expect. */
+const DRIVE_STEPS = [2, 5, 10, 15, 20, 30, 60, 120, 240];
+const DRIVE_BINS_MAX = 12;
+/* Where the axis stops. A parish has families three states away, and an axis
+   drawn to the farthest of them would spend every bar but one on an empty
+   afternoon's driving, so the steps are cut at the drive the 95th household in
+   a hundred is within and everyone past it is gathered into one last bar. It is
+   labelled with a "+" and says so on its hover: nobody is dropped, and the
+   figures above the map are over all of them either way. */
+const DRIVE_CUT = 0.95;
+
+/** The shape of the drive rather than the average of it: the ZIP codes on the
+    map gathered into equal steps of drive time, each step carrying the
+    households that live in it. Weighted and cut the same way the figures above
+    the map are, so both selectors move it — a bar is families, or people, and
+    the metro-only view drops the ZIP codes outside it from the bars as it does
+    from the map. A ZIP code the router could not reach is in no bar, as it is
+    in no average. */
+function driveHistogram(zips, weight) {
+  const rows = zips.filter((z) => z.drive != null && weight.of(z) > 0)
+                   .sort((a, b) => a.drive - b.drive);
+  if (!rows.length) return null;
+  const total = rows.reduce((a, z) => a + weight.of(z), 0);
+
+  let seen = 0, cut = rows[rows.length - 1].drive;
+  for (const z of rows) {
+    seen += weight.of(z);
+    if (seen >= total * DRIVE_CUT) { cut = z.drive; break; }
+  }
+  const reach = cut / 60;
+  const step = DRIVE_STEPS.find((s) => Math.ceil(reach / s) <= DRIVE_BINS_MAX) ||
+               DRIVE_STEPS[DRIVE_STEPS.length - 1];
+  const count = Math.max(1, Math.ceil((reach + 1e-9) / step));
+  const bins = Array.from({ length: count }, (_, i) => (
+    { lo: i * step, hi: (i + 1) * step, total: 0, zips: [] }));
+  const far = rows.filter((z) => z.drive / 60 >= count * step);
+  if (far.length) bins.push({ lo: count * step, hi: null, over: true, total: 0, zips: [] });
+
+  for (const z of rows) {
+    const b = bins[Math.min(bins.length - 1, Math.floor(z.drive / 60 / step))];
+    b.total += weight.of(z);
+    b.zips.push(z);
+  }
+  return { step, bins, steps: count, span: bins.length * step, total,
+           over: far.length ? bins[bins.length - 1] : null };
+}
+
+/** What a bar covers, in the words the hover and the axis both use. */
+const driveBinLabel = (b) =>
+  b.over ? `${num(b.lo)}+ min from church` : `${num(b.lo)}–${num(b.hi)} min from church`;
+
+/** The histogram itself. The bars touch, because the axis is a length of time
+    rather than a row of categories, and they are painted in the colour the
+    drive times are quoted in everywhere else on the page. The weighted median
+    goes down as a dashed rule, so the tile above the map can be seen sitting in
+    the distribution it was taken from. */
+function drawDriveHist(container, W) {
+  const weight = mapWeight(), zips = shownZips();
+  const h = driveHistogram(zips, weight);
+  if (!h) return;
+  const drive = averageDrive(zips, weight);
+  const H = Math.max(210, Math.min(300, W * 0.34));
+  const M = { l: 44, r: 12, t: 20, b: 42 };
+  const iw = W - M.l - M.r, ih = H - M.t - M.b;
+  const svg = svgEl("svg", { width: W, height: H, role: "img",
+    "aria-label": `How many ${weight.noun} live each drive time from church, in ` +
+      `${h.step}-minute steps` }, container);
+
+  const hi = Math.max(...h.bins.map((b) => b.total)) * 1.12 || 1;
+  const x = (mins) => M.l + (mins / h.span) * iw;
+  const y = (v) => M.t + ih - (v / hi) * ih;
+
+  for (const v of ticks(0, hi, 4)) {
+    svgEl("line", { x1: M.l, x2: M.l + iw, y1: y(v), y2: y(v), class: "gridline" }, svg);
+    svgEl("text", { x: M.l - 8, y: y(v) + 4, class: "tick", "text-anchor": "end" }, svg)
+      .textContent = num(v, Number.isInteger(v) ? 0 : 1);
+  }
+  svgEl("line", { x1: M.l, x2: M.l + iw, y1: M.t + ih, y2: M.t + ih, class: "axisline" }, svg);
+
+  // The axis is written at the edges between the bars rather than under them: a
+  // bar covers a range, and the range is what its two edges say. The gathering
+  // bar is the exception — it has no top edge, so its own "45+" goes under it,
+  // and the edge it would repeat is left off.
+  const room = W < 480 ? 5 : W < 720 ? 8 : 12;
+  const every = Math.ceil((h.steps + 1) / room);
+  const edges = [];
+  for (let i = 0; i <= h.steps; i += every) edges.push(i);
+  if (edges[edges.length - 1] !== h.steps && h.steps - edges[edges.length - 1] < every / 2)
+    edges.pop();
+  if (edges[edges.length - 1] !== h.steps) edges.push(h.steps);
+  const label = (at, text) =>
+    svgEl("text", { x: at, y: H - 26, class: "tick", "text-anchor": "middle" }, svg)
+      .textContent = text;
+  for (const i of edges)
+    if (!(h.over && i === h.steps)) label(x(i * h.step), num(i * h.step));
+  if (h.over) label(x(h.over.lo + h.step / 2), num(h.over.lo) + "+");
+  svgEl("text", { x: M.l + iw / 2, y: H - 6, class: "ann", "text-anchor": "middle" }, svg)
+    .textContent = "Minutes' drive to church";
+
+  const tip = tooltip(container);
+  h.bins.forEach((b) => {
+    const x0 = x(b.lo), x1 = x0 + iw / h.bins.length, top = y(b.total);
+    // The gathering bar stands off from the rest: it is the only one whose
+    // width is not the time it covers, and the gap says so before the hover has
+    // to.
+    const pad = b.over ? 6 : 0.75;
+    if (b.total)
+      svgEl("path", { d: barPath(x0 + pad, top, Math.max(1, x1 - x0 - pad - 0.75),
+        M.t + ih - top, 3, "up"), fill: "var(--s2)" }, svg);
+    const named = b.zips.slice(0, 6).map((z) => z.zip).join(", ");
+    const rest = b.zips.length - 6;
+    svgEl("rect", { x: x0, y: M.t, width: Math.max(1, x1 - x0), height: ih,
+      fill: "transparent" }, svg)
+      .addEventListener("pointermove", () => tip.show((x0 + x1) / 2, Math.min(top, M.t + ih),
+        `<b>${driveBinLabel(b)}</b>` +
+        `<div class="r"><span>${weight.label}</span><span>${num(b.total)}</span></div>` +
+        `<div class="r"><span>Share</span><span>${num((b.total / h.total) * 100, 0)}%</span></div>` +
+        (b.zips.length
+          ? `<div class="n">ZIP ${named}${rest > 0 ? ` and ${num(rest)} more` : ""}</div>`
+          : `<div class="n">No ${weight.noun} this far out.</div>`)));
+  });
+
+  // Last, so that no bar is drawn over the rule and no rule over its words.
+  if (drive && drive.median != null) {
+    const px = x(Math.min(h.span, drive.median / 60));
+    svgEl("line", { x1: px, x2: px, y1: M.t, y2: M.t + ih, class: "medrule" }, svg);
+    const anchor = M.l + iw - px < 120 ? "end" : "start";
+    svgEl("text", { x: px + (anchor === "end" ? -7 : 7), y: M.t + 10, class: "medlabel",
+      "text-anchor": anchor }, svg).textContent =
+      `Median ${fmtMins(drive.median, 1)} min`;
+  }
+}
+
+/** Where the church's own label can go: beside the cross, or under it. */
+const churchBox = (x, y, at) =>
+  at === "below" ? { x0: x - 42, x1: x + 42, y0: y + 10, y1: y + 26 }
+  : at === "right" ? { x0: x - 9, x1: x + 96, y0: y - 10, y1: y + 10 }
+  : { x0: x - 96, x1: x + 9, y0: y - 10, y1: y + 10 };
+
+/** A Latin cross, centred on the point and two `s` tall. */
+const crossPath = (x, y, s) =>
+  `M${x - s * 0.26} ${y - s} h${s * 0.52} v${s * 0.46} h${s * 0.4} v${s * 0.52}` +
+  ` h${-s * 0.4} v${s * 1.02} h${-s * 0.52} v${-s * 1.02} h${-s * 0.4} v${-s * 0.52}` +
+  ` h${s * 0.4} Z`;
+
+function drawMap(container, W) {
+  const zips = shownZips(), weight = mapWeight(), scale = mapScale();
+
+  // The frame is the ZIP codes on the map, so cutting to the metro area zooms
+  // to it rather than leaving the map at the width of the whole record.
+  const frame = boundsOf(zips.map((z) => z.geometry)) || boundsOf([PLACES.msa]);
+  const padx = (frame.e - frame.w) * 0.04, pady = (frame.n - frame.s) * 0.04;
+  const b = { w: frame.w - padx, e: frame.e + padx, s: frame.s - pady, n: frame.n + pady };
+  const kx = Math.cos(((b.s + b.n) / 2) * Math.PI / 180);
+  const H = Math.max(300, Math.min(660, (W * (b.n - b.s)) / ((b.e - b.w) * kx)));
+
+  const svg = svgEl("svg", { width: W, height: H, role: "img",
+    "aria-label": `ZIP codes shaded by the number of ${weight.noun} in each` }, container);
+  const P = projector(b, W, H);
+  const clip = "mapclip-" + Math.random().toString(36).slice(2);
+  svgEl("rect", { x: 0, y: 0, width: W, height: H },
+    svgEl("clipPath", { id: clip }, svgEl("defs", {}, svg)));
+  const g = svgEl("g", { "clip-path": `url(#${clip})` }, svg);
+  const over = svgEl("g", { "clip-path": `url(#${clip})` }, svg);
+
+  /* The shading goes into `g` and the ground it sits on into `over`, which is
+     painted after it: a boundary under an opaque fill is a boundary nobody can
+     see, and the counties and the river are what a reader places the parish
+     against. Four passes, in the order they have to be laid to come out right.
+
+     The casings go first, all of them: neighbouring counties share an edge and
+     each draws it, so a casing laid after a line would eat the line its
+     neighbour had already put down. Then the river, over the casings — a county
+     line down the middle of the water is the bank, and its casing would
+     otherwise bleach the river along every mile of it. Then the county lines,
+     which cross the water and read on it. Then the metro boundary, faintest of
+     the four, over them all. */
+  const scenery = () => {
+    const shapes = [];
+    // One name for the river, on the widest piece of it with the room to hold
+    // it — the rest of the water is the same river, and the pieces are offered
+    // widest first so the name lands where the river is broadest.
+    const river = [...PLACES.river].sort(
+      (a, b) => (+b.properties.AREAWATER || 0) - (+a.properties.AREAWATER || 0));
+    const county = PLACES.counties.map((c) => ({ f: c, box: pathOf(c.geometry, P) }));
+
+    for (const c of county)
+      svgEl("path", { d: c.box.d, class: "countycase", "fill-rule": "evenodd" }, over);
+    for (const w of river) {
+      const box = pathOf(w.geometry, P);
+      svgEl("path", { d: box.d, class: "water", "fill-rule": "evenodd" }, over);
+      shapes.push({ f: w, box, text: RIVER.label, cls: "waterlabel", size: 11,
+                    room: 0, group: "river", once: true });
+    }
+    for (const c of county) {
+      svgEl("path", { d: c.box.d, class: "countyline", "fill-rule": "evenodd" }, over);
+      shapes.push({ ...c, text: `${c.f.properties.BASENAME} County`,
+                    cls: "countylabel", size: 10.5, room: 90, group: "county" });
+    }
+    svgEl("path", { d: pathOf(PLACES.msa, P).d, class: "msaline", "fill-rule": "evenodd" }, over);
+    return shapes;
+  };
+
+  if (!zips.length) {
+    scenery();
+    svgEl("text", { x: W / 2, y: H / 2, class: "mapempty" }, svg).textContent =
+      MAP_VIEW.extent === "msa"
+        ? `No ZIP code on the sheet falls inside the ${MSA.label}.`
+        : "No ZIP code on the sheet could be placed on the ground.";
+    return;
+  }
+
+  const tip = tooltip(container);
+  const drawn = [];
+  for (const z of zips) {
+    const v = weight.of(z), box = pathOf(z.geometry, P);
+    drawn.push({ z, v, box });
+    const path = svgEl("path", { d: box.d, class: "zone", "fill-rule": "evenodd",
+      fill: scale.fill(v) }, g);
+    path.addEventListener("mouseenter", () => path.classList.add("on"));
+    path.addEventListener("mouseleave", () => { path.classList.remove("on"); tip.hide(); });
+    path.addEventListener("mousemove", (ev) => {
+      const r = container.getBoundingClientRect();
+      tip.show(ev.clientX - r.left, ev.clientY - r.top,
+        `<b>ZIP ${z.zip}${z.msa ? ` · ${MSA.label}` : ""}</b>` +
+        swatchRow("People", scale.fill(z.people), z.people) +
+        swatchRow("Families", scale.fill(z.families), z.families) +
+        `<div class="r"><span>People per family</span><span>` +
+        `${num(z.people / z.families, 1)}</span></div>` +
+        (z.drive != null
+          ? `<div class="r"><span>Drive to church</span><span>` +
+            `${fmtMins(z.drive)} min</span></div>`
+          : ""));
+    });
+  }
+
+  const shapes = scenery();
+
+  // The centre is an annotation over the map rather than one of its areas, so
+  // it goes down first as far as the labels are concerned: they make way for it.
+  const centre = weightedCentre(zips, weight);
+  const taken = [];
+  let mark = null;
+  if (centre) {
+    const [cx, cy] = P(centre.lon, centre.lat);
+    const right = W - cx >= 150;
+    mark = { cx, cy, right };
+    taken.push({ x0: right ? cx - 9 : cx - 112, x1: right ? cx + 112 : cx + 9,
+                 y0: cy - 9, y1: cy + 9 });
+  }
+
+  // The church is the point every drive time is measured to, and the figure
+  // means less without it, so it is on the map the same way the centre is: an
+  // annotation the labels make way for. Off the edge of the frame it is simply
+  // not drawn — the clip would take it anyway.
+  const [chx, chy] = P(CHURCH.lon, CHURCH.lat);
+  let church = null;
+  if (chx >= 0 && chx <= W && chy >= 0 && chy <= H) {
+    // A parish lives around its church, so on a narrow map the centre's label
+    // is a few pixels away: the label goes beside the cross where the side has
+    // the room, on the other side or under it where it does not, and nowhere at
+    // all if none of the three is free — where the legend is what says what the
+    // cross is. Either way the cross itself keeps its ground from the ZIP codes.
+    const wide = W - chx >= 130;
+    const at = [wide ? "right" : "left", wide ? "left" : "right", "below"]
+      .find((s) => !boxHits(churchBox(chx, chy, s), taken)) || null;
+    church = { cx: chx, cy: chy, at };
+    taken.push(at ? churchBox(chx, chy, at)
+                  : { x0: chx - 9, x1: chx + 9, y0: chy - 9, y1: chy + 9 });
+  }
+
+  // A line a reader cannot name is not a frame, so the counties and the river
+  // are named on the map itself. Each name sits at the Census's own interior
+  // point, which is guaranteed to lie inside the shape, and they are laid down
+  // before the ZIP code figures rather than after: the shape a figure sits in
+  // is what the figure is read against, and a figure with nowhere to go is
+  // still on the hover and in the table.
+  const named = [], done = new Set();
+  for (const sh of shapes) {
+    // The counties are each named; the river is named once, however many
+    // pieces of water the Census cuts it into.
+    if (sh.once && done.has(sh.group)) continue;
+    const lat = +sh.f.properties.INTPTLAT, lon = +sh.f.properties.INTPTLON;
+    if (!isFinite(lat) || !isFinite(lon)) continue;
+    // A shape too narrow on screen to hold its own name goes unnamed rather
+    // than reaching across its neighbours for the room.
+    if (sh.box.x1 - sh.box.x0 < sh.room) continue;
+    const [lx, ly] = P(lon, lat);
+    const r = textBox(lx, ly, textWidth(sh.text, sh.size), 8, 8);
+    if (r.x0 < 0 || r.x1 > W || r.y0 < 0 || r.y1 > H) continue;
+    if (!boxIn(r, sh.box) || boxHits(r, taken)) continue;
+    taken.push(r);
+    done.add(sh.group);
+    named.push({ lx, ly, text: sh.text, cls: sh.cls });
+  }
+
+  const labels = [];
+  for (const { z, v, box } of [...drawn].sort((a, b) => b.box.area - a.box.area)) {
+    const [lx, ly] = P(z.lon, z.lat);
+    const figure = num(v);
+    // Two lines: the ZIP code at 9.5px over the figure at 11.5px.
+    const two = textBox(lx, ly, Math.max(textWidth(z.zip, 9.5), textWidth(figure, 11.5)), 11, 15);
+    const one = textBox(lx, ly, textWidth(figure, 11.5), 6, 7);
+    const fits = (r) => boxIn(r, box) && !boxHits(r, taken);
+    if (fits(two)) { taken.push(two); labels.push({ z, v, lx, ly, both: true }); }
+    else if (fits(one)) { taken.push(one); labels.push({ z, v, lx, ly, both: false }); }
+  }
+
+  // Words last, so no boundary and no other area is drawn through them.
+  for (const N of named)
+    svgEl("text", { x: N.lx, y: N.ly + 4, class: N.cls }, svg).textContent = N.text;
+
+  for (const L of labels) {
+    const t = svgEl("text", { x: L.lx, y: L.ly + (L.both ? -1 : 4), class: "zlabel",
+      fill: scale.ink(L.v), stroke: scale.fill(L.v) }, svg);
+    if (L.both) {
+      svgEl("tspan", { x: L.lx, class: "zc" }, t).textContent = L.z.zip;
+      svgEl("tspan", { x: L.lx, dy: "1.15em" }, t).textContent = num(L.v);
+    } else {
+      t.textContent = num(L.v);
+    }
+  }
+
+  if (mark) {
+    svgEl("circle", { cx: mark.cx, cy: mark.cy, r: 6.5, class: "cdot" }, svg);
+    svgEl("text", { x: mark.cx + (mark.right ? 12 : -12), y: mark.cy + 4, class: "mlabel",
+      "text-anchor": mark.right ? "start" : "end" }, svg).textContent = "Weighted centre";
+  }
+
+  if (church) {
+    svgEl("path", { d: crossPath(church.cx, church.cy, 7), class: "churchmark" }, svg);
+    if (church.at)
+      svgEl("text", {
+        x: church.cx + (church.at === "right" ? 11 : church.at === "left" ? -11 : 0),
+        y: church.cy + (church.at === "below" ? 22 : 4), class: "clabel",
+        "text-anchor": church.at === "right" ? "start"
+                     : church.at === "left" ? "end" : "middle",
+      }, svg).textContent = "The church";
+  }
+}
+
+/* ---------------------------------------------------------------- page wiring */
+
+/** A tooltip row. Set `fractional` for a figure that is not a count: a trailing
+    mean lands on a tenth and a median on a half, and both should read as they
+    are rather than be rounded into looking like a headcount. */
+const swatchRow = (label, color, v, fractional) => v == null ? "" :
+  `<div class="r"><span><span class="swatch" style="display:inline-block;background:${color}"></span> ${label}</span>` +
+  `<span>${fractional ? fmtTrail(v) : num(v)}</span></div>`;
+
+/** Which month a given week of the year falls in — the axis's second line. */
+const MONTH_AT_WEEK = (() => {
+  const out = {};
+  for (let w = 1; w <= 53; w++) {
+    const d = new Date(Date.UTC(2025, 0, 1 + (w - 1) * 7));
+    out[w] = d.toLocaleDateString("en-US", { month: "short", timeZone: "UTC" });
+  }
+  return out;
+})();
+
+// Years are an ordered category, so they take an ordinal ramp rather than
+// five competing hues — and the newest year lands on the strongest step.
+const ORDINAL = ["var(--o1)", "var(--o2)", "var(--o3)", "var(--o4)", "var(--o5)"];
+// What to write on each step of it: the ramp runs light to dark in one theme
+// and dark to light in the other, so the ink cannot be the page's ink.
+const ON_ORDINAL = ["var(--on1)", "var(--on2)", "var(--on3)", "var(--on4)", "var(--on5)"];
+
+// Colour is fixed to the year itself, so switching series does not repaint the
+// years that survive. The newest year always lands on the strongest step.
+function yearColors() {
+  const all = [...new Set(dated.map((r) => r.date.slice(0, 4)))].sort().slice(-ORDINAL.length);
+  return new Map(all.map((y, i) => [y, ORDINAL[ORDINAL.length - all.length + i]]));
+}
+
+function woyYears(get) {
+  const byYear = new Map();
+  for (const r of dated) {
+    const yr = r.date.slice(0, 4);
+    const v = get(r);
+    if (v == null || !YEAR_COLOR.has(yr)) continue;
+    if (!byYear.has(yr)) byYear.set(yr, []);
+    byYear.get(yr).push({ week: r.week, v, date: r.date });
+  }
+  return [...byYear.entries()].sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([year, points]) => ({
+      year,
+      points: points.sort((a, b) => a.week - b.week),
+      color: YEAR_COLOR.get(year),
+    }));
+}
+
+function deltaHtml(now, before, unit) {
+  if (now == null || before == null) return "";
+  const d = now - before;
+  const pct = before ? (d / before) * 100 : 0;
+  const cls = Math.abs(pct) < 1.5 ? "flat" : d > 0 ? "up" : "down";
+  const arrow = cls === "flat" ? "±" : d > 0 ? "▲" : "▼";
+  return `<span class="delta ${cls}">${arrow} ${num(Math.abs(d), Math.abs(d) < 10 ? 1 : 0)}` +
+         ` (${d > 0 ? "+" : d < 0 ? "−" : ""}${num(Math.abs(pct), 1)}%)</span> ${unit}`;
+}
+
+/** The control over the trailing statistic, and everything that reads from it. */
+function renderTrailbar() {
+  segmented($("seg-window"), TRAIL_WINDOWS.map((w) => ({
+    label: String(w), aria: `${w} Sundays`, on: w === TRAIL.window,
+    pick: () => setTrail({ window: w }),
+  })));
+  segmented($("seg-stat"), TRAIL_STATS.map((st) => ({
+    label: st.label, on: st.key === TRAIL.stat, pick: () => setTrail({ stat: st.key }),
+  })));
+  $("trail-note").textContent =
+    `Every trailing figure below is the ${trailStat().noun} of the last ${TRAIL.window} ` +
+    `recorded Sundays. A short window follows the swings; a long one holds the trend still.`;
+}
+
+/** The control over the two-site offset. The field is left alone while it has
+    focus, so a recompute mid-keystroke does not fight what is being typed. */
+function renderOffsetbar() {
+  const el = $("offset");
+  if (document.activeElement !== el) el.value = String(OFFSET);
+  $("offset-unit").textContent =
+    `from every Sunday before ${fmtDate(SWITCH.date)}`;
+  $("offset-note").textContent = OFFSET
+    ? `Until then the parish met at St Martin's as well as St Francis and part of the ` +
+      `congregation was counted at both. Every figure on this page is ${OFFSET} lower on ` +
+      `those Sundays than the sheet records. Set it to 0 for the sheet's own numbers.`
+    : `The sheet's own numbers, as they stand. Sundays before this date counted two sites, ` +
+      `so raise this to net out whoever was counted at both.`;
+}
+
+/** Change the offset and rebuild the page from the sheet's own numbers. Every
+    median, trailing series and ranking moves with it, so this recomputes the
+    payload rather than patching the charts. */
+function setOffset(v) {
+  const n = Math.max(0, Math.min(999, Math.round(v)));
+  if (n === OFFSET) return;
+  OFFSET = n;
+  try { localStorage.setItem(OFFSET_STORE, JSON.stringify(OFFSET)); } catch (_) { /* refused */ }
+  if (RAW_TABLE) renderDashboard(payloadFrom(RAW_TABLE));
+  else renderOffsetbar();
+}
+
+$("offset").addEventListener("input", (ev) => {
+  const n = parseInt(ev.target.value, 10);
+  if (Number.isFinite(n) && n >= 0) setOffset(n);
+});
+// Whatever was left in the field — empty, or out of range — settles back to
+// the offset the page is actually drawn with.
+$("offset").addEventListener("blur", renderOffsetbar);
+
+/** Change the trailing statistic and redraw the parts of the page that use it. */
+function setTrail(patch) {
+  Object.assign(TRAIL, patch);
+  try { localStorage.setItem(TRAIL_STORE, JSON.stringify(TRAIL)); } catch (_) { /* refused */ }
+  renderTrailbar();
+  renderTiles();
+  renderMain();
+  renderWeekOfYear();
+  renderSundayTable();
+}
+
+function renderSubtitle() {
+  const gen = new Date(DATA.generated);
+  $("subtitle").innerHTML =
+    `${counted.length} Sundays recorded from ${fmtDate(S.first)} to ${fmtDate(S.latest.date)}` +
+    (S.excluded ? `, ${S.excluded} of them held out of the statistics` : "") + `. ` +
+    `Built from the <a href="${DATA.source_url}" target="_blank" rel="noopener">parish spreadsheet</a>, ` +
+    `read ${gen.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}` +
+    ` at ${gen.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}.` +
+    (OFFSET ? ` Sundays before ${fmtDate(SWITCH.date)} are shown ${OFFSET} below what the ` +
+              `sheet records, for the St Martin's overlap.` : "");
+}
+
+function renderTiles() {
+  const t = $("tiles");
+  t.innerHTML = "";
+  const tile = (k, v, meta) => {
+    const d = htmlEl("div", "tile", t);
+    htmlEl("div", "k", d, k);
+    d.insertAdjacentHTML("beforeend", `<div class="v">${v}</div><div class="m">${meta}</div>`);
+  };
+  const last = S.latest;
+  tile("Most recent Sunday", num(last.attendance),
+    `${fmtDate(last.date)}${last.note ? ` &middot; ${last.note}` : ""}`);
+  // The trailing tile is computed here rather than in the payload, because the
+  // window and the measure are the reader's to choose.
+  const values = scored.map((r) => r.stat);
+  const n = TRAIL.window, fn = trailStat().fn;
+  const recent = values.slice(-n), prior = values.slice(-2 * n, -n);
+  const now = recent.length ? fn(recent) : null;
+  const before = prior.length ? fn(prior) : null;
+  tile(trailLabel(), fmtTrail(now),
+    (deltaHtml(now, before, `vs. the ${n} before`) || "&nbsp;") +
+    (recent.length < n
+      ? `<br><span style="color:var(--muted)">only ${recent.length} Sundays on record</span>`
+      : ""));
+  tile(`${S.this_year} so far`, num(S.ytd_median),
+    (deltaHtml(S.ytd_median, S.ytd_prior_median, `vs. ${S.last_year}`) || "&nbsp;") +
+    `<br><span style="color:var(--muted)">median of ${S.ytd_services} Sundays, ` +
+    `both years through week ${S.ytd_cutoff_week}</span>`);
+  tile("Best Sunday on record", num(S.all_time_high.attendance),
+    `${fmtDate(S.all_time_high.date)}${S.all_time_high.note ? ` &middot; ${S.all_time_high.note}` : ""}`);
+}
+
+function renderMain() {
+  const held = DATA.sundays.filter((r) => r.excluded && r.attendance != null).length;
+  $("lede-main").textContent =
+    `Weekly counts bounce around a lot — a snowstorm or a baptism moves the number by ` +
+    `fifty. The ${trailLabel()} is the line to read through them; widen the window above ` +
+    `for a steadier trend, narrow it to follow the swings.`;
+  legend($("lg-main"), [
+    { label: "Weekly count", color: "var(--muted)" },
+    { label: trailLabel(), color: "var(--s1)" },
+    ...(held ? [{ label: "Held out of the statistics", color: "var(--s2)", ring: true }] : []),
+    ...(switchInRange()
+      ? [{ label: "Moved to St Francis only", color: "var(--mark)", dash: true }] : []),
+  ]);
+  const gaps = DATA.sundays.filter((r) => r.attendance == null).length;
+  $("cap-main").textContent =
+    `Lines break where no count was recorded (${gaps} such Sunday${gaps === 1 ? "" : "s"}). ` +
+    (held ? `The ${held} ringed Sunday${held === 1 ? " is" : "s are"} marked in the sheet ` +
+            `as snow or severe weather, so the trailing line steps over ` +
+            `${held === 1 ? "it" : "them"}. ` : "") +
+    `The trailing line starts once ${TRAIL.window} Sundays have been recorded. ` +
+    (switchInRange()
+      ? `The dashed rule is ${fmtDate(SWITCH.date)}, when ${SWITCH.what}; ` +
+        (OFFSET ? `Sundays to its left have ${OFFSET} taken off for the overlap. `
+                : `the control above sets what to take off the Sundays to its left. `)
+      : "") +
+    `Hover for the week's figure and any note left in the sheet.`;
+  mount($("c-main"), drawMain);
+}
+
+const WOY_MODES = [
+  { key: "count", get: (r) => r.attendance, label: () => "Weekly count",
+    caption: () => "Every Sunday as recorded. Weeks with no count are simply absent, so a " +
+                   "line jumps across the gap." },
+  { key: "trail", get: trailOf, label: trailLabel,
+    caption: () => `Each point is the ${trailStat().noun} of that Sunday and the ` +
+                   `${TRAIL.window - 1} before it, so the line carries over from the ` +
+                   `previous year rather than restarting in January.` },
+];
+// Which series is on the chart, kept out here so that changing the trailing
+// statistic redraws this chart without throwing the reader back to the default.
+let WOY_MODE = "trail";
+
+function renderWeekOfYear() {
+  const mode = WOY_MODES.find((m) => m.key === WOY_MODE) || WOY_MODES[0];
+  $("lede-woy").textContent =
+    `The same attendance laid out by week of the year, so each year runs over the top of ` +
+    `the last. Weeks line up with the calendar, not the church year, so Easter drifts by a ` +
+    `few weeks between lines. The sheet opens in late November 2022, so that year is only ` +
+    `five Sundays long, and the trailing line needs ${TRAIL.window} recorded Sundays ` +
+    `before it can start.` +
+    (switchInRange()
+      ? ` The dashed rule is the week ${fmtDate(SWITCH.date)} falls in. It divides ` +
+        `${SWITCH.year}'s line alone: the years before it are two sites throughout, and ` +
+        `the years after it St Francis alone.` : "");
+  segmented($("seg-woy"), WOY_MODES.map((m) => ({
+    label: m.label(), on: m.key === WOY_MODE,
+    pick: () => { WOY_MODE = m.key; renderWeekOfYear(); },
+  })));
+  $("cap-woy").textContent = mode.caption();
+  mount($("c-woy"), (box, W) => {
+    // A year with no data in this series drops out, so relabel every redraw.
+    const years = woyYears(mode.get);
+    legend($("lg-woy"), [
+      ...years.map((g) => ({ label: g.year, color: g.color })),
+      ...(switchInRange()
+        ? [{ label: "Moved to St Francis only", color: "var(--mark)", dash: true }] : []),
+    ]);
+    drawWeekOfYear(box, W, years);
+  });
+}
+
+function renderTopTen() {
+  const top = S.top;
+  $("lede-top").textContent =
+    `The ten highest counts on record. Most of them have a reason attached in the sheet.`;
+  const t = $("t-top");
+  t.innerHTML = "<thead><tr><th>#</th><th>Date</th><th class='n'>Attendance</th>" +
+    "<th>What was on</th></tr></thead>";
+  const tb = htmlEl("tbody", null, t);
+  const hi = top[0].attendance;
+  top.forEach((r, i) => {
+    const tr = htmlEl("tr", null, tb);
+    htmlEl("td", "rank", tr, String(i + 1));
+    htmlEl("td", null, tr, fmtDate(r.date));
+    const td = htmlEl("td", "n", tr);
+    td.innerHTML = `<span class="meter"><span style="width:${(r.attendance / hi) * 100}%"></span></span>` +
+      `<span class="mval">${num(r.attendance)}</span>`;
+    htmlEl("td", "why", tr, r.note || "—");
+  });
+}
+
+function renderYears() {
+  const years = S.years;
+  const partial = years.filter((y) => y.services < 40).map((y) => y.year);
+  legend($("lg-year"), [{ label: "Median Sunday attendance", color: "var(--s1)" }]);
+  const items = years.map((y) => ({
+    label: y.year, tick: y.year,
+    segs: [{ v: y.median, color: "var(--s1)", name: "Median" }],
+    note: `${y.services} Sundays recorded &middot; mean ${num(y.mean, 1)} &middot; ` +
+          `range ${num(y.min)}–${num(y.max)}` +
+          (partial.includes(y.year) ? "<br>Partial year." : ""),
+  }));
+  $("cap-year").innerHTML = "Median rather than mean, so a single confirmation Sunday does " +
+    "not move the year; the control at the top of the page governs the trailing figures " +
+    "only." + (partial.length ? ` ${partial.join(" and ")} are partial years.` : "");
+  mount($("c-year"), (c, W) => drawBars(c, W, items, { aria: "Median attendance by year" }));
+
+  const MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const buckets = MON.map(() => []);
+  for (const r of scored) buckets[day(r.date).getMonth()].push(r.stat);
+  const med = (a) => { const s = [...a].sort((x, y) => x - y); const n = s.length;
+    return n ? (n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2) : 0; };
+  legend($("lg-month"), [{ label: "Median Sunday attendance", color: "var(--s3)" }]);
+  mount($("c-month"), (c, W) => drawBars(c, W, MON.map((m, i) => ({
+    label: m, tick: W < 480 ? m[0] : m,
+    segs: [{ v: med(buckets[i]), color: "var(--s3)", name: "Median" }],
+    note: `${buckets[i].length} Sundays across all years`,
+  })), { aria: "Median attendance by calendar month", valueLabels: false }));
+}
+
+function renderSundayTable() {
+  const t = $("t-sundays");
+  t.innerHTML = "<thead><tr><th>Date</th><th class='n'>Attendance</th>" +
+    `<th class='n'>${TRAIL.window}-wk ${trailStat().noun}</th><th>Note</th></tr></thead>`;
+  const tb = htmlEl("tbody", null, t);
+  for (const r of dated) {
+    const tr = htmlEl("tr", null, tb);
+    htmlEl("td", null, tr, fmtDate(r.date));
+    htmlEl("td", "n", tr, r.attendance == null ? "not recorded" : num(r.attendance));
+    htmlEl("td", "n", tr, trailOf(r) == null ? "—" : fmtTrail(trailOf(r)));
+    htmlEl("td", null, tr, [r.note, r.excluded && `excluded: ${r.excluded}`,
+      r.adjusted && `sheet says ${num(r.raw)}, less ${r.adjusted} for the two-site overlap`]
+      .filter(Boolean).join(" · "));
+  }
+}
+
+/* The sheet is tidy now, so this reads as a record of what is and isn't in it. */
+const GROUPS = [
+  { codes: ["undated", "duplicate"], title: "Rows that cannot be placed",
+    icon: "!", color: "var(--critical)",
+    blurb: "A row with no date, or two rows claiming the same one." },
+  { codes: ["missing"], title: "Services with no count", icon: "○", color: "var(--warn)",
+    blurb: "A row exists but no number was entered, so these Sundays are holes in the trend lines." },
+  { codes: ["gap"], title: "Sundays with no row at all", icon: "○", color: "var(--warn)",
+    blurb: "These fall inside the range the sheet covers but were never entered." },
+  { codes: ["weekday"], title: "Not a Sunday", icon: "·", color: "var(--muted)",
+    blurb: "Kept in the series, but worth knowing it is a weekday service." },
+  { codes: ["excluded"], title: "Held out of the statistics", icon: "·", color: "var(--muted)",
+    blurb: "Marked in the sheet's own “Exclude from stats” column. They still appear as " +
+           "weekly counts on the first chart, but no median, mean or ranking uses them." },
+];
+
+function renderFixList() {
+  const box = $("fixlist");
+  box.innerHTML = "";
+  const issues = DATA.issues;
+  const holes = issues.filter((i) => i.code === "missing" || i.code === "gap").length;
+  $("lede-fix").innerHTML =
+    `The sheet reads cleanly — every row carries a real date and a total. What is left is ` +
+    `an account of what the record does not cover: <strong>${holes} Sunday` +
+    `${holes === 1 ? "" : "s"}</strong> with no attendance figure, plus the services the ` +
+    `sheet itself marks as exceptional.`;
+
+  for (const g of GROUPS) {
+    const mine = issues.filter((i) => g.codes.includes(i.code));
+    if (!mine.length) continue;
+    const grp = htmlEl("div", "fixgroup", box);
+    grp.style.setProperty("--sev", g.color);
+    htmlEl("h3", null, grp).innerHTML = `${g.title} <span class="pill">${mine.length}</span>`;
+    htmlEl("p", null, grp, g.blurb);
+    for (const i of mine) {
+      const row = htmlEl("div", "fix", grp);
+      htmlEl("div", "icon", row, g.icon);
+      const b = htmlEl("div", "body", row);
+      htmlEl("div", "where", b,
+        (i.date ? fmtDate(i.date) : "undated") + (i.row ? ` · row ${i.row}` : "") +
+        (i.note ? ` — “${i.note}”` : ""));
+      htmlEl("div", "what", b, i.message);
+    }
+  }
+  $("fixnote").innerHTML =
+    "This list is rebuilt from the spreadsheet every run — fill in a missing Sunday at the " +
+    "source and it drops off next time. To hold a service out of the statistics, put the " +
+    "reason in the <strong>Exclude from stats</strong> column; the dashboard reads it and " +
+    "says so here." +
+    (OFFSET ? ` The ${OFFSET} taken off each Sunday before ` +
+              `${fmtDate(SWITCH.date)} is the reader's own setting, not something in the ` +
+              `sheet: the sheet's figures are untouched, and the control at the top of the ` +
+              `page puts them back.` : "");
+}
+
+/* ------------------------------------------------------------- map wiring */
+
+/* The families sheet and the Census boundaries, once they have arrived. Null
+   until then, and null for good if the read fails — the section says why and
+   the rest of the page is untouched either way. */
+let PLACES = null;
+
+const WEIGHTS = [
+  { key: "people", label: "People", noun: "people", one: "person", adj: "people",
+    of: (z) => z.people },
+  { key: "families", label: "Families", noun: "families", one: "family", adj: "family",
+    of: (z) => z.families },
+];
+const EXTENTS = [
+  { key: "all", label: "Everywhere" },
+  { key: "msa", label: `${MSA.label} only` },
+];
+// What a reader who has expressed no preference is shown: the parish counted in
+// households, over the metro area it mostly lives in. Both are the narrower
+// answer, and both selectors sit right above the map for the wider one.
+const MAP_VIEW = { weight: "families", extent: "msa" };
+const MAP_STORE = "parish-family-map";
+
+const mapWeight = () => WEIGHTS.find((w) => w.key === MAP_VIEW.weight);
+const otherWeight = () => WEIGHTS.find((w) => w.key !== MAP_VIEW.weight);
+/** The ZIP codes the map is drawing: placed on the ground, and inside the metro
+    area if that is what the reader asked for. */
+const shownZips = () =>
+  PLACES.zips.filter((z) => z.geometry && (MAP_VIEW.extent === "all" || z.msa));
+
+function restoreMapView() {
+  try {
+    const v = JSON.parse(localStorage.getItem(MAP_STORE) || "null");
+    if (v && WEIGHTS.some((w) => w.key === v.weight) && EXTENTS.some((e) => e.key === v.extent))
+      Object.assign(MAP_VIEW, { weight: v.weight, extent: v.extent });
+  } catch (_) { /* private mode, or a browser that refuses storage */ }
+}
+
+function setMapView(patch) {
+  Object.assign(MAP_VIEW, patch);
+  try { localStorage.setItem(MAP_STORE, JSON.stringify(MAP_VIEW)); } catch (_) { /* refused */ }
+  renderPlaces();
+}
+
+function renderPlaces() {
+  const weight = mapWeight(), zips = shownZips(), scale = mapScale();
+  const drive = averageDrive(zips, weight);
+  const all = PLACES.zips;
+  const placed = all.filter((z) => z.geometry);
+  const unplaced = all.filter((z) => !z.geometry);
+  const sum = (rows, of) => rows.reduce((a, z) => a + of(z), 0);
+
+  segmented($("seg-weight"), WEIGHTS.map((w) => ({
+    label: w.label, on: w.key === MAP_VIEW.weight, pick: () => setMapView({ weight: w.key }),
+  })));
+  segmented($("seg-extent"), EXTENTS.map((e) => ({
+    label: e.label, on: e.key === MAP_VIEW.extent, pick: () => setMapView({ extent: e.key }),
+  })));
+
+  const inMsa = placed.filter((z) => z.msa);
+  const share = sum(placed, weight.of);
+  $("lede-map").innerHTML =
+    `<strong>${num(sum(all, (z) => z.families))} families</strong>, ` +
+    `${num(sum(all, (z) => z.people))} people, across ${num(all.length)} ZIP codes — ` +
+    `${num(inMsa.length)} of them inside the ${MSA.long} metro area` +
+    (share ? `, ${num((sum(inMsa, weight.of) / share) * 100, 0)}% of the ` +
+             `${weight.noun} the map can place` : "") + `. ` +
+    `Read from a second parish spreadsheet, of which this page reads the ZIP code and ` +
+    `the count and nothing else: every row is summed into its ZIP code before anything ` +
+    `here is drawn, so no household is named, mapped or counted on its own.`;
+
+  renderDrive(drive, weight);
+
+  // The unit goes on the first step only, and agrees with it: a bottom step of
+  // exactly one is "1 family", not "1 families".
+  legend($("lg-map"), scale.bins.map((bin, i) => ({
+    color: scale.color(i), box: true,
+    label: binLabel(bin) + (i ? "" : ` ${bin[1] === 1 ? weight.one : weight.noun}`),
+  })).concat([
+    { color: "var(--mark)", dot: true, label: "Weighted centre" },
+    { color: "var(--s2)", dot: true, label: "The church" },
+    // The ground, in the order the eye should read it: the counties the shading
+    // is framed by, the river it is cut by, and the metro area last, which is
+    // now a boundary among them rather than the map's subject.
+    ...(PLACES.counties.length ? [{ color: "var(--ink-2)", label: "County lines" }] : []),
+    ...(PLACES.river.length ? [{ color: "var(--water-line)", label: RIVER.label }] : []),
+    { color: "var(--muted)", dash: true, label: MSA.label },
+  ]));
+
+  mount($("c-map"), drawMap);
+
+  const centre = weightedCentre(zips, weight);
+  // Named only if the read for it came back: both are scenery the map is drawn
+  // without rather than waited on, so the caption says what is there.
+  const ground = [PLACES.counties.length ? "the county lines" : null,
+                  PLACES.river.length ? `the ${RIVER.label}` : null].filter(Boolean);
+  $("cap-map").innerHTML =
+    `ZIP codes shaded by the number of <strong>${weight.noun}</strong> living in each, in ` +
+    `${scale.bins.length} step${scale.bins.length === 1 ? "" : "s"}` +
+    (MAP_VIEW.extent === "msa"
+      ? `, cut to the ${num(zips.length)} inside the ${MSA.label}`
+      : `, everywhere the sheet reaches`) + `. ` +
+    (centre
+      ? `The dot is the ${weight.adj}-weighted centre of those ${num(zips.length)} ZIP ` +
+        `codes — ${fmtLatLon(centre)} — each ZIP code pulling on it by its ` +
+        `${weight.noun} from the Census's interior point of the area. `
+      : "") +
+    `The cross is the church, at ${CHURCH.short}, and the drive time on each ZIP code's ` +
+    `hover and in the table below is to it from that same interior point. ` +
+    `Boundaries are 2020 Census ZIP Code Tabulation Areas, read from the Census Bureau's ` +
+    `TIGERweb service as the page loads` +
+    (ground.length
+      ? `, and over them, from the same service, ${ground.join(" and ")} — the ground the ` +
+        `shading is read against`
+      : "") +
+    `. The ${MSA.label} is the faint dashed rule.`;
+
+  renderDriveHist(zips, weight);
+  renderZipTable();
+
+  const bad = PLACES.issues;
+  $("mapnote").innerHTML =
+    `A ZIP code is a set of postal routes rather than an area, so the map draws the ` +
+    `Census's tabulation area for each one, and a ZIP code that is nothing but PO boxes ` +
+    `has none. ` +
+    (unplaced.length
+      ? `<strong>${num(unplaced.length)} of the sheet's ZIP codes — ` +
+        `${unplaced.map((z) => z.zip).join(", ")} — could not be placed</strong>, so ` +
+        `${num(sum(unplaced, (z) => z.families))} families and ` +
+        `${num(sum(unplaced, (z) => z.people))} people are in the table below but not on ` +
+        `the map, in the shading, or in the weighted centre. `
+      : `Every ZIP code on the sheet was placed. `) +
+    `Whether a ZIP code is in the metro area is decided by where the Census puts the ` +
+    `centre of its area, not by the sheet.` +
+    (bad.length
+      ? ` ${num(bad.length)} row${bad.length === 1 ? "" : "s"} could not be read: ` +
+        bad.map((b) => `row ${b.row}, ${b.what}`).join("; ") + "."
+      : "") +
+    `<br><br>Drive times are one per ZIP code, not one per household: every family in a ` +
+    `ZIP code is driving from the Census's interior point of it — the same point the ` +
+    `weighted centre is worked out from — to ${CHURCH.address}. That is the whole of the ` +
+    `approximation, and it is a real one: a ZIP code is miles across, and the sheet says ` +
+    `nothing finer than which one a family is in. The route itself is OpenStreetMap's, ` +
+    `from the OSRM demo router, at free-flow speeds — the speed limits on the roads, with ` +
+    `no traffic, no weather and no Sunday morning in it, so read these as how far apart ` +
+    `the places are rather than as what the drive took last week.` +
+    (PLACES.driveError
+      ? ` <strong>No drive time could be read this time</strong> — ` +
+        `${PLACES.driveError} — so the figures above the map are missing rather than stale.`
+      : drive && drive.missing
+        ? ` ${num(drive.missing)} ZIP code${drive.missing === 1 ? "" : "s"} on the map ` +
+          `could not be routed to the church at all, and ${drive.missing === 1 ? "is" : "are"} ` +
+          `in neither figure above it.`
+        : "");
+}
+
+/** The figures the drive times exist for, over the ZIP codes on the map and
+    weighted the way the map is coloured — so both selectors move them, and the
+    label says which weighting they are being read under. */
+function renderDrive(drive, weight) {
+  const el = $("drive-tiles");
+  el.innerHTML = "";
+  if (!drive) {
+    el.innerHTML = `<div class="note" style="margin:0"><strong>No drive time to church ` +
+      `could be worked out.</strong> ` +
+      (PLACES.driveError
+        ? `${sentence(PLACES.driveError)} The page keeps no times of its own, so there ` +
+          `is nothing to show here until that read works; the map below is unaffected.`
+        : `None of the ZIP codes on the map could be routed to the church.`) + `</div>`;
+    return;
+  }
+  const tile = (k, v, meta) => {
+    const d = htmlEl("div", "tile", el);
+    htmlEl("div", "k", d, k);
+    d.insertAdjacentHTML("beforeend",
+      `<div class="v">${v} <small>min</small></div><div class="m">${meta}</div>`);
+  };
+  const over = `${num(drive.total)} ${drive.total === 1 ? weight.one : weight.noun} in ` +
+               `${num(drive.zips)} ZIP code${drive.zips === 1 ? "" : "s"}` +
+               (MAP_VIEW.extent === "msa" ? `, ${MSA.label} only` : "");
+  tile("Average drive to church", fmtMins(drive.mean, 1),
+       `The ${weight.adj}-weighted mean over ${over}`);
+  tile(`Half the ${weight.noun} are within`, fmtMins(drive.median, 1),
+       `The ${weight.adj}-weighted median — the far tail pulls the mean and leaves this`);
+  const far = weight.of(drive.farthest);
+  tile("The farthest ZIP code", fmtMins(drive.farthest.drive),
+       `ZIP ${drive.farthest.zip}, where ${num(far)} ` +
+       `${far === 1 ? `${weight.one} lives` : `${weight.noun} live`}`);
+}
+
+/** The histogram under the map, and the words that say what a bar is. The card
+    is only there when there is something to put in it: no drive time read, or
+    nothing on the map the router could reach, and it goes rather than standing
+    empty — the note above the map already says why the figures are missing. */
+function renderDriveHist(zips, weight) {
+  const h = driveHistogram(zips, weight);
+  $("hist-card").hidden = !h;
+  if (!h) return;
+
+  legend($("lg-drive"), [
+    { color: "var(--s2)", box: true, label: `${weight.label} by drive time` },
+    { color: "var(--ink-2)", dash: true, label: "Weighted median" },
+  ]);
+  mount($("c-drive"), drawDriveHist);
+
+  const within = h.bins[0].total;
+  $("cap-drive").innerHTML =
+    `Every bar is the <strong>${weight.noun}</strong> whose ZIP code is that far from the ` +
+    `church, in ${num(h.step)}-minute steps` +
+    (MAP_VIEW.extent === "msa"
+      ? `, over the ${num(zips.length)} ZIP codes inside the ${MSA.label}`
+      : `, over every ZIP code the sheet reaches`) + `. ` +
+    `It follows both selectors above it, so the bars are the same rows the figures at ` +
+    `the top of the section are worked out from: ` +
+    `${num((within / h.total) * 100, 0)}% of the ${weight.noun} on it are within ` +
+    `${num(h.step)} minutes of church, and the dashed rule is the weighted median. ` +
+    (h.over
+      ? `The last bar gathers everyone past ${num(h.over.lo)} minutes — ` +
+        `${num(h.over.total)} ${h.over.total === 1 ? weight.one : weight.noun} in ` +
+        `${num(h.over.zips.length)} ZIP code${h.over.zips.length === 1 ? "" : "s"}, the ` +
+        `farthest at ${fmtMins(h.over.zips[h.over.zips.length - 1].drive)} minutes — so ` +
+        `one household a long way off does not take the whole axis. `
+      : "") +
+    `The steps are drive time rather than distance, and a whole ZIP code stands at the ` +
+    `one drive, so a bar is only as fine as the ZIP codes in it are.`;
+}
+
+function renderZipTable() {
+  const weight = mapWeight(), other = otherWeight();
+  const t = $("t-zips");
+  t.innerHTML = "";
+  const head = htmlEl("tr", null, htmlEl("thead", null, t));
+  for (const [label, cls] of [["ZIP code", ""], ["Families", "n"], ["People", "n"],
+                              ["Per family", "n"], ["Drive (min)", "n"], ["On the map", ""]])
+    htmlEl("th", cls, head, label);
+  const body = htmlEl("tbody", null, t);
+  const rows = [...PLACES.zips].sort((a, b) =>
+    weight.of(b) - weight.of(a) || other.of(b) - other.of(a) || a.zip.localeCompare(b.zip));
+  for (const z of rows) {
+    const tr = htmlEl("tr", null, body);
+    htmlEl("td", null, tr, z.zip);
+    htmlEl("td", "n", tr, num(z.families));
+    htmlEl("td", "n", tr, num(z.people));
+    htmlEl("td", "n", tr, num(z.people / z.families, 1));
+    htmlEl("td", "n", tr, z.drive != null ? fmtMins(z.drive) : "—");
+    htmlEl("td", "why", tr, !z.geometry ? "no Census area for this ZIP code"
+                          : z.msa ? MSA.label : "outside the " + MSA.label);
+  }
+}
+
+/* The section reads two things this page cannot fall back on — a second sheet
+   and the Census — so it carries its own state, and neither one failing costs
+   the attendance dashboard anything. */
+const placesBar = document.createElement("div");
+placesBar.className = "status";
+placesBar.setAttribute("role", "status");
+const placesParts = ["lede-map", "drive-tiles", "map-card", "zips-details", "mapnote"];
+
+function placesSay(html, isError) {
+  placesBar.classList.toggle("err", !!isError);
+  placesBar.innerHTML = html;
+}
+
+async function bootPlaces() {
+  const sec = $("places-sec");
+  sec.querySelector("h2").after(placesBar);
+  placesParts.forEach((id) => { $(id).hidden = true; });
+  placesSay(`<span class="spin"></span> Reading the family locations…`);
+  sec.hidden = false;
+  try {
+    PLACES = await loadPlaces();
+    renderPlaces();
+    placesParts.forEach((id) => { $(id).hidden = false; });
+    placesBar.remove();
+  } catch (err) {
+    placesSay(`<span><strong>Could not draw the map.</strong> ` +
+      `${sentence(err.message || String(err))} This page keeps no copy of the ` +
+      `locations or of the boundaries, so there is nothing to show until both reads ` +
+      `work.</span><button type="button">Try again</button>`, true);
+    placesBar.querySelector("button").addEventListener("click", bootPlaces);
+  }
+}
+
+/** Draw the whole page from a payload. Called once, however the data arrived. */
+function renderDashboard(payload) {
+  DATA = payload;
+  S = DATA.summary;
+  counted = DATA.sundays.filter((r) => r.attendance != null && r.date);
+  // Every statistic on the page runs off `stat`, which is null for a Sunday the
+  // sheet holds out; `attendance` is the raw count and is only ever plotted.
+  scored = DATA.sundays.filter((r) => r.stat != null);
+  dated = DATA.sundays.filter((r) => r.date);
+  YEAR_COLOR = yearColors();
+
+  renderSubtitle();
+  renderTrailbar();
+  renderOffsetbar();
+  renderTiles();
+  renderMain();
+  renderWeekOfYear();
+  renderTopTen();
+  renderYears();
+  renderSundayTable();
+  renderFixList();
+}
+
+/* Read the sheet in the browser, on every load.
+ *
+ * This file is the whole program: there is no build step and no server. The
+ * fetch, the validation and the statistics all happen here, as the page loads,
+ * so the page is current whenever it is opened. Google's visualization
+ * endpoint answers a link-shared sheet as JSON, from any origin, with no key.
+ *
+ * There is deliberately no copy of the data in this file. If the read fails the
+ * page says so and draws nothing, so a broken read is impossible to mistake for
+ * a working one.
+ */
+
+const SHEET_ID = "1_fG2lWXGtTwbHlaKCil9f3FSrW8DVqiB49KEVHJ3pB8";
+const SHEET_NAME = "Sunday Attendance";
+const SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/edit`;
+const COLUMNS = ["Date", "Total", "Notes", "Exclude from stats"];
+const TIMEOUT_MS = 15000;
+
+/* The page reads two workbooks, both the same way, so everything below takes
+   the one it is reading: `{ id, name, what }`, where `what` is how the sheet is
+   named to the reader when something goes wrong with it. */
+const ATTENDANCE = { id: SHEET_ID, name: SHEET_NAME, what: "the parish spreadsheet" };
+
+/* ------------------------------------------------------------------ reading */
+
+function gvizUrl(src, handler) {
+  const tqx = "out:json" + (handler ? `;responseHandler:${handler}` : "");
+  return `https://docs.google.com/spreadsheets/d/${src.id}/gviz/tq` +
+    `?tqx=${encodeURIComponent(tqx)}` +
+    `&headers=1&sheet=${encodeURIComponent(src.name)}&_=${Date.now()}`;
+}
+
+/** The table out of a gviz response, or a throw explaining what came back. */
+function tableOf(res) {
+  if (res.status === "error") {
+    const why = (res.errors || []).map((e) => e.message).filter(Boolean).join("; ");
+    throw new Error(why || "the sheet refused the request");
+  }
+  if (!res.table || !res.table.cols) throw new Error("the sheet answered without a table");
+  return res.table;
+}
+
+/** gviz replies as a JavaScript call: /*O_o*\/ handler({...}); */
+function unwrap(body) {
+  const open = body.indexOf("("), close = body.lastIndexOf(")");
+  let res = null;
+  if (open >= 0 && close > open) {
+    try { res = JSON.parse(body.slice(open + 1, close)); } catch (_) { /* not a gviz reply */ }
+  }
+  // A sheet that is no longer shared answers with a sign-in page, not JSON.
+  if (!res || typeof res !== "object")
+    throw new Error("the sheet answered with a web page rather than data — is it " +
+                    "still shared with anyone who has the link?");
+  return tableOf(res);
+}
+
+async function fetchTable(src) {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), TIMEOUT_MS);
+  try {
+    const r = await fetch(gvizUrl(src), { signal: ctl.signal, credentials: "omit", cache: "no-store" });
+    if (!r.ok) throw new Error(`the sheet answered ${r.status}`);
+    return unwrap(await r.text());
+  } catch (err) {
+    if (err.name === "AbortError") throw new Error("the sheet did not answer in time");
+    if (err.name === "TypeError")
+      throw new Error("the browser would not make the request — no network, or the page " +
+                      "was opened from a file rather than served");
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** The same read as a script tag, which same-origin rules do not police. */
+function jsonpTable(src) {
+  return new Promise((resolve, reject) => {
+    const name = "__sheet_" + Math.random().toString(36).slice(2);
+    const el = document.createElement("script");
+    const done = (err, table) => {
+      clearTimeout(timer);
+      delete window[name];
+      el.remove();
+      err ? reject(err) : resolve(table);
+    };
+    const timer = setTimeout(() => done(new Error("the sheet did not answer in time")), TIMEOUT_MS);
+    window[name] = (res) => {
+      try { done(null, tableOf(res)); } catch (e) { done(e); }
+    };
+    el.onerror = () => done(new Error("the sheet could not be loaded"));
+    el.src = gvizUrl(src, name);
+    document.head.appendChild(el);
+  });
+}
+
+async function loadTable(src) {
+  try {
+    return await fetchTable(src);
+  } catch (err) {
+    // A page opened from disk has no origin Google will answer to, so the
+    // browser blocks the fetch before it is even sent. A script tag is not
+    // subject to that, and is worth one try before giving up.
+    try { return await jsonpTable(src); } catch (_) { throw err; }
+  }
+}
+
+/* --------------------------------------------- validation and statistics */
+
+const cellNum = (v) => (typeof v === "number" && isFinite(v) ? v : null);
+const cellText = (v) => {
+  if (v == null) return null;
+  return String(v).trim() || null;
+};
+
+/** gviz dates arrive as `Date(2025,0,26)` — a JavaScript constructor call. */
+function cellDate(v) {
+  if (typeof v !== "string") return null;
+  const m = v.match(/^Date\((\d+),(\d+),(\d+)/);
+  if (m) return isoDate(new Date(+m[1], +m[2], +m[3], 12));
+  return /^\d{4}-\d{2}-\d{2}$/.test(v.trim()) ? v.trim() : null;
+}
+
+const isoDate = (d) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const addDays = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n, 12);
+
+function weekOfYear(iso) {
+  const [y, m, d] = iso.split("-").map(Number);
+  return Math.floor((Date.UTC(y, m - 1, d) - Date.UTC(y, 0, 1)) / 86400000 / 7) + 1;
+}
+
+function readSundays(table) {
+  const header = table.cols.map((c) => cellText(c.label));
+  if (String(header.slice(0, COLUMNS.length)) !== String(COLUMNS))
+    throw new Error(`unexpected columns in “${SHEET_NAME}”: ` +
+                    `${header.filter(Boolean).join(", ") || "none"} — expected ${COLUMNS.join(", ")}`);
+
+  const out = [];
+  (table.rows || []).forEach((r, i) => {
+    const c = (r.c || []).map((cell) => (cell ? cell.v ?? null : null));
+    if (c.every((v) => v == null)) return;
+    out.push({
+      row: i + 2,                       // the header the sheet was read with is row 1
+      date: cellDate(c[0]),
+      attendance: cellNum(c[1]),
+      note: cellText(c[2]),
+      excluded: cellText(c[3]),
+    });
+  });
+  out.sort((a, b) => (a.date || "9999").localeCompare(b.date || "9999") || a.row - b.row);
+  return out;
+}
+
+/** Everything about the sheet that a person might want to look at again. */
+function check(sundays) {
+  const issues = [];
+  const seen = new Map();
+  for (const s of sundays) {
+    if (!s.date) {
+      issues.push([s, "undated", "row has no date, so it cannot be placed on any chart"]);
+      continue;
+    }
+    const d = new Date(s.date + "T12:00:00");
+    if (s.attendance == null)
+      issues.push([s, "missing", "service recorded with no attendance count"]);
+    if (d.getDay() !== 0)
+      issues.push([s, "weekday", `dated ${d.toLocaleDateString("en-US", { weekday: "long" })}, ` +
+                                 `not a Sunday — kept, but it is not a Sunday service`]);
+    if (seen.has(s.date))
+      issues.push([s, "duplicate", `same date as row ${seen.get(s.date)}`]);
+    seen.set(s.date, s.row);
+  }
+
+  // Sundays that fall inside the covered range but have no row at all.
+  const have = new Set(sundays.filter((s) => s.date && new Date(s.date + "T12:00:00").getDay() === 0)
+                              .map((s) => s.date));
+  const known = [...have].sort();
+  if (known.length) {
+    const last = new Date(known[known.length - 1] + "T12:00:00");
+    for (let d = new Date(known[0] + "T12:00:00"); d <= last; d = addDays(d, 7)) {
+      const iso = isoDate(d);
+      if (!have.has(iso))
+        issues.push([{ row: null, date: iso, note: null }, "gap", "no row for this Sunday"]);
+    }
+  }
+
+  for (const s of sundays)
+    if (s.excluded)
+      issues.push([s, "excluded", `held out of every statistic — “${s.excluded}”`]);
+
+  const order = ["undated", "duplicate", "weekday", "missing", "gap", "excluded"];
+  issues.sort((a, b) => order.indexOf(a[1]) - order.indexOf(b[1]) ||
+                        (a[0].date || "").localeCompare(b[0].date || ""));
+  return issues.map(([s, code, message]) =>
+    ({ row: s.row ?? null, date: s.date, note: s.note ?? null, code, message }));
+}
+
+function median(xs) {
+  const s = [...xs].sort((a, b) => a - b);
+  if (!s.length) return null;
+  const mid = s.length >> 1;
+  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+}
+const mean1 = (xs) => Math.round((xs.reduce((a, b) => a + b, 0) / xs.length) * 10) / 10;
+
+/** Trailing `fn` over the last `window` recorded services; nothing until full. */
+function rolling(values, window, fn) {
+  const out = [], seen = [];
+  for (const v of values) {
+    if (v != null) seen.push(v);
+    out.push(seen.length >= window ? fn(seen.slice(-window)) : null);
+  }
+  return out;
+}
+
+/** Statistics ignore excluded Sundays; the charts still draw them. */
+function summarise(sundays) {
+  const counted = sundays.filter((s) => s.stat != null);
+  if (!counted.length) throw new Error("the sheet has no attendance figures in it yet");
+  const values = counted.map((s) => s.stat);
+
+  const byYear = new Map();
+  for (const s of counted) {
+    const y = s.date.slice(0, 4);
+    if (!byYear.has(y)) byYear.set(y, []);
+    byYear.get(y).push(s.stat);
+  }
+  const years = [...byYear.entries()].sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([year, v]) => ({
+      year, services: v.length, median: median(v), mean: mean1(v),
+      min: Math.min(...v), max: Math.max(...v),
+    }));
+
+  // Year to date, against the same stretch of last year rather than its whole.
+  const thisYear = counted[counted.length - 1].date.slice(0, 4);
+  const ytd = counted.filter((s) => s.date.slice(0, 4) === thisYear);
+  const cutoff = ytd.reduce((m, s) => Math.max(m, weekOfYear(s.date)), 0);
+  const lastYear = String(+thisYear - 1);
+  const ytdPrior = counted.filter((s) => s.date.slice(0, 4) === lastYear &&
+                                         weekOfYear(s.date) <= cutoff);
+
+  const top = [...counted].sort((a, b) => b.stat - a.stat || a.date.localeCompare(b.date)).slice(0, 10);
+
+  return {
+    first: counted[0].date,
+    latest: counted[counted.length - 1],
+    services_recorded: counted.length,
+    services_logged: sundays.length,
+    excluded: sundays.filter((s) => s.excluded).length,
+    all_time_high: top[0],
+    all_time_median: median(values),
+    this_year: thisYear,
+    last_year: lastYear,
+    ytd_median: ytd.length ? median(ytd.map((s) => s.stat)) : null,
+    ytd_services: ytd.length,
+    ytd_prior_median: ytdPrior.length ? median(ytdPrior.map((s) => s.stat)) : null,
+    ytd_cutoff_week: cutoff,
+    top, years,
+  };
+}
+
+/* The table exactly as the sheet gave it, kept so that changing the offset
+   rebuilds every figure from the sheet's own numbers rather than from numbers
+   already adjusted once. `generated` is the read, not the redraw. */
+let RAW_TABLE = null, GENERATED = null;
+
+function payloadFrom(table) {
+  const sundays = readSundays(table);
+  const issues = check(sundays);
+  // Two sites until the move: `raw` is what the sheet says, `attendance` is what
+  // the page draws and counts, and `adjusted` is the difference so that every
+  // place a figure is shown can say it has been changed.
+  for (const s of sundays) {
+    s.raw = s.attendance;
+    s.adjusted = s.raw != null && s.date && s.date < SWITCH.date ? Math.min(OFFSET, s.raw) : 0;
+    if (s.adjusted) s.attendance = s.raw - s.adjusted;
+  }
+  // A service counts toward the statistics if it carries a date and the sheet
+  // does not hold it out. An undated row cannot be placed in time, so it is
+  // reported in check() rather than folded into a median.
+  for (const s of sundays) {
+    s.stat = s.excluded || !s.date ? null : s.attendance;
+    s.week = s.date ? weekOfYear(s.date) : null;
+  }
+  // Every window and measure the reader can pick between, computed once: eight
+  // passes over a few hundred numbers, and switching is then a redraw.
+  const stats = sundays.map((s) => s.stat);
+  for (const s of sundays) s.trail = {};
+  for (const w of TRAIL_WINDOWS)
+    for (const st of TRAIL_STATS) {
+      const series = rolling(stats, w, st.fn);
+      sundays.forEach((s, i) => { s.trail[st.key + w] = series[i]; });
+    }
+
+  return {
+    generated: GENERATED || new Date().toISOString(),
+    source_url: SHEET_URL,
+    sundays,
+    summary: summarise(sundays),
+    issues,
+  };
+}
+
+/* ------------------------------------------------- where the families live */
+
+/* A second workbook: one row per household, with a ZIP code and a count of
+ * people. It has a name column too, and this page deliberately does not carry
+ * it anywhere. readFamilies() checks the heading — so a reshuffled sheet fails
+ * loudly rather than quietly plotting the wrong column — and then reads columns
+ * A and B only, summing every row into its ZIP code before it returns. Nothing
+ * downstream of it has a household to draw, hover or tabulate, and for the same
+ * reason the page does not link the sheet: the map is public, the roll is not.
+ */
+const FAMILY_SHEET_ID = "1IWrLCYFaiuqXfdVEBJ6UZUURgIvvO0IUE9uWJJ2_uz0";
+const FAMILY_SHEET_NAME = "Sheet1";
+const FAMILY_COLUMNS = ["Zip Code", "Count", "Family Name"];
+const LOCATIONS = { id: FAMILY_SHEET_ID, name: FAMILY_SHEET_NAME,
+                    what: "the family locations spreadsheet" };
+
+/* The ZIP code boundaries and the metro area are the Census Bureau's, fetched
+   as the page loads the same way the figures are: no key, no build step, and
+   nothing about them kept in this file. ZCTAs are the Census's approximation of
+   a ZIP code — a ZIP code is a set of delivery routes, not an area, so this is
+   the nearest thing to one that has edges. */
+const TIGER = "https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb";
+const ZCTA_QUERY = `${TIGER}/PUMA_TAD_TAZ_UGA_ZCTA/MapServer/1/query`;
+const CBSA_QUERY = `${TIGER}/CBSA/MapServer/3/query`;
+const COUNTY_QUERY = `${TIGER}/State_County/MapServer/1/query`;
+const HYDRO_QUERY = `${TIGER}/Hydro/MapServer/1/query`;
+
+/* Drive times come from the OSRM demo server, which routes over OpenStreetMap
+   with no key and from any origin, the way the Census services are read. It is
+   asked once, not once per ZIP code: the church is the single destination and
+   every ZIP code's representative point is a source, so a parish of any size
+   costs one request per ninety ZIP codes. What comes back is free-flow driving
+   — the speed limits on the roads, with no traffic, no weather and no Sunday
+   morning in it. */
+const OSRM_TABLE = "https://router.project-osrm.org/table/v1/driving/";
+const OSRM_MAX_SOURCES = 90;
+
+/** Seconds to the church from each point, in the order the points came in. A
+    point the router cannot reach comes back null rather than dropping out, so
+    what is missing stays countable. */
+async function driveTimes(points) {
+  const out = [];
+  for (let i = 0; i < points.length; i += OSRM_MAX_SOURCES)
+    out.push(...(await driveChunk(points.slice(i, i + OSRM_MAX_SOURCES))));
+  return out;
+}
+
+async function driveChunk(points) {
+  const at = (p) => `${p.lon.toFixed(6)},${p.lat.toFixed(6)}`;
+  const url = `${OSRM_TABLE}${[CHURCH, ...points].map(at).join(";")}` +
+              `?destinations=0&sources=${points.map((_, i) => i + 1).join(";")}` +
+              `&annotations=duration`;
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), TIMEOUT_MS);
+  try {
+    const r = await fetch(url, { signal: ctl.signal, credentials: "omit" });
+    if (!r.ok) throw new Error(`the routing service answered ${r.status}`);
+    const j = await r.json();
+    if (j.code !== "Ok")
+      throw new Error(j.message || "the routing service refused the request");
+    const rows = j.durations || [];
+    return points.map((_, i) => (rows[i] && rows[i][0] != null ? rows[i][0] : null));
+  } catch (err) {
+    if (err.name === "AbortError")
+      throw new Error("the routing service did not answer in time");
+    if (err.name === "TypeError")
+      throw new Error("the browser would not reach the routing service");
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** One GeoJSON read from TIGERweb. POSTed, because the list of ZIP codes is as
+    long as the sheet and a URL is not. */
+async function tiger(url, params, what) {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), TIMEOUT_MS);
+  try {
+    const r = await fetch(url, {
+      method: "POST", signal: ctl.signal, credentials: "omit",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ f: "geojson", outSR: "4326", returnGeometry: "true", ...params }),
+    });
+    if (!r.ok) throw new Error(`the Census boundary service answered ${r.status} for ${what}`);
+    const j = await r.json();
+    if (j.error) throw new Error(j.error.message || `the Census boundary service refused ${what}`);
+    return (j.features || []).filter((f) => f.geometry);
+  } catch (err) {
+    if (err.name === "AbortError")
+      throw new Error(`the Census boundary service did not answer in time for ${what}`);
+    if (err.name === "TypeError")
+      throw new Error("the browser would not reach the Census boundary service");
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Five digits out of whatever the cell holds. The sheet stores ZIP codes as
+    numbers, so 07470 arrives as 7470, and a ZIP+4 arrives with four to spare. */
+function zipOf(v) {
+  if (v == null) return null;
+  const digits = String(typeof v === "number" ? Math.round(v) : v).replace(/[^0-9]/g, "");
+  if (!digits || digits.length > 9) return null;
+  return digits.length > 5 ? digits.slice(0, 5) : digits.padStart(5, "0");
+}
+
+/** The sheet, summed to ZIP codes. The third column is checked and dropped. */
+function readFamilies(table) {
+  const header = table.cols.map((c) => cellText(c.label));
+  if (String(header.slice(0, FAMILY_COLUMNS.length)) !== String(FAMILY_COLUMNS))
+    throw new Error(`unexpected columns in the family locations sheet: ` +
+                    `${header.filter(Boolean).join(", ") || "none"} — ` +
+                    `expected ${FAMILY_COLUMNS.join(", ")}`);
+
+  const by = new Map(), issues = [];
+  (table.rows || []).forEach((r, i) => {
+    const zipCell = r.c && r.c[0] ? r.c[0].v ?? null : null;
+    const countCell = r.c && r.c[1] ? r.c[1].v ?? null : null;
+    if (zipCell == null && countCell == null) return;
+    const row = i + 2;                     // the header the sheet was read with is row 1
+    const zip = zipOf(zipCell), people = cellNum(countCell);
+    if (!zip) {
+      issues.push({ row, what: "no usable ZIP code, so this household is nowhere on the map" });
+      return;
+    }
+    if (people == null || people <= 0) {
+      issues.push({ row, zip, what: "no count of people, so this household is in no total" });
+      return;
+    }
+    const z = by.get(zip) || { zip, people: 0, families: 0 };
+    z.people += people;
+    z.families += 1;
+    by.set(zip, z);
+  });
+  return { zips: [...by.values()].sort((a, b) => a.zip.localeCompare(b.zip)), issues };
+}
+
+/* ------------------------------------------------------------ plane geometry */
+
+/** Every linear ring in a polygon or a multipolygon, holes included. */
+function* ringsOf(g) {
+  if (!g) return;
+  if (g.type === "Polygon") yield* g.coordinates;
+  else if (g.type === "MultiPolygon") for (const part of g.coordinates) yield* part;
+}
+
+function boundsOf(geoms) {
+  let w = Infinity, e = -Infinity, s = Infinity, n = -Infinity;
+  for (const g of geoms)
+    for (const ring of ringsOf(g))
+      for (const pt of ring) {
+        if (pt[0] < w) w = pt[0];
+        if (pt[0] > e) e = pt[0];
+        if (pt[1] < s) s = pt[1];
+        if (pt[1] > n) n = pt[1];
+      }
+  return isFinite(w) ? { w, e, s, n } : null;
+}
+
+/** Ray casting, counting crossings over every ring: a point in a hole comes
+    back out again, so a doughnut reads as a doughnut. */
+function inside(lon, lat, g) {
+  let odd = false;
+  for (const ring of ringsOf(g))
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const [xi, yi] = ring[i], [xj, yj] = ring[j];
+      if ((yi > lat) !== (yj > lat) && lon < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) odd = !odd;
+    }
+  return odd;
+}
+
+/* --------------------------------------------------------------- the payload */
+
+/** The sheet and the boundaries, joined. Read on its own, so that a Census
+    service that is down or a sheet that has been unshared costs the page this
+    section and nothing else. */
+async function loadPlaces() {
+  const { zips, issues } = readFamilies(await loadTable(LOCATIONS));
+  if (!zips.length) throw new Error("the family locations sheet has no usable rows in it yet");
+
+  const [areas, metro] = await Promise.all([
+    tiger(ZCTA_QUERY, {
+      where: `ZCTA5 IN (${zips.map((z) => `'${z.zip}'`).join(",")})`,
+      outFields: "ZCTA5,INTPTLAT,INTPTLON", maxAllowableOffset: "0.002",
+    }, "the ZIP code areas"),
+    tiger(CBSA_QUERY, {
+      where: `GEOID='${MSA.geoid}'`, outFields: "NAME", maxAllowableOffset: "0.001",
+    }, "the metro area"),
+  ]);
+  if (!metro.length)
+    throw new Error(`the Census boundary service knows no metro area ${MSA.geoid}`);
+  const msa = metro[0].geometry;
+
+  // A ZIP code is a set of delivery routes; one that is nothing but PO boxes
+  // covers no ground and so has no ZCTA. Those come back unplaced, and the page
+  // says so rather than putting them somewhere plausible.
+  const shape = new Map(areas.map((f) => [f.properties.ZCTA5, f]));
+  for (const z of zips) {
+    const f = shape.get(z.zip);
+    z.geometry = f ? f.geometry : null;
+    z.lat = f ? +f.properties.INTPTLAT : null;
+    z.lon = f ? +f.properties.INTPTLON : null;
+    // The Census's own interior point, which is guaranteed to lie in the area.
+    z.msa = f ? inside(z.lon, z.lat, msa) : null;
+  }
+
+  // Three reads the section can do without, asked alongside each other. The
+  // county lines and the river are the ground the shading is read against
+  // rather than any of the figures, so a request that fails costs the map that
+  // line and nothing else — it is drawn without them and says so nowhere. The
+  // drive times are the figure this section now leads with, but a map of where
+  // the families live is still that with the router down, so a failure there
+  // costs the times and says why underneath rather than costing the map.
+  const frame = boundsOf(zips.map((z) => z.geometry).concat([msa]));
+  const placed = zips.filter((z) => z.geometry);
+  // The window both pieces of scenery are cut to: the whole record, so that the
+  // metro-only view and the everywhere view are drawn from the one read.
+  const around = {
+    geometry: `${frame.w - 0.4},${frame.s - 0.4},${frame.e + 0.4},${frame.n + 0.4}`,
+    geometryType: "esriGeometryEnvelope", inSR: "4326",
+    spatialRel: "esriSpatialRelIntersects",
+  };
+  const [counties, river, driving] = await Promise.all([
+    // The interior point comes back with the line, because the county is
+    // labelled on the map and a label has to land inside its own shape.
+    tiger(COUNTY_QUERY, {
+      ...around, outFields: "BASENAME,INTPTLAT,INTPTLON", maxAllowableOffset: "0.01",
+    }, "the county lines").catch(() => []),
+    // Areal hydrography: the water the river covers, not a centreline, so a
+    // river a mile wide is drawn a mile wide.
+    tiger(HYDRO_QUERY, {
+      ...around, where: `NAME='${RIVER.name}'`,
+      outFields: "NAME,AREAWATER,INTPTLAT,INTPTLON", maxAllowableOffset: "0.002",
+    }, `the ${RIVER.label}`).catch(() => []),
+    driveTimes(placed).then((secs) => ({ secs }))
+      .catch((err) => ({ error: err.message || String(err) })),
+  ]);
+  placed.forEach((z, i) => { z.drive = driving.secs ? driving.secs[i] : null; });
+
+  return { zips, issues, msa, counties, river, driveError: driving.error || null,
+           generated: new Date().toISOString() };
+}
+
+/* ------------------------------------------------------------------- the page */
+
+const bar = document.createElement("div");
+bar.className = "status";
+bar.setAttribute("role", "status");
+document.querySelector(".wrap").prepend(bar);
+
+function say(html, isError) {
+  bar.classList.toggle("err", !!isError);
+  bar.innerHTML = html;
+}
+
+/** A reason, read as a sentence of its own: capitalised, and punctuated only
+    if it does not already end in a question mark of its own. */
+const sentence = (s) => s.charAt(0).toUpperCase() + s.slice(1) + (/[.?!]$/.test(s) ? "" : ".");
+
+/* Nothing on the page means anything until the sheet has been read, so the
+   sections stay out of the way until there is something to put in them. */
+const sections = [...document.querySelectorAll(
+  "#trailbar, #offsetbar, .wrap section:not(#places-sec)")];
+sections.forEach((s) => { s.hidden = true; });
+
+(async function boot() {
+  restoreTrail();
+  restoreOffset();
+  restoreMapView();
+  // A second sheet and the Census, read alongside rather than after: the map is
+  // its own section with its own state, and either read can fail on its own.
+  bootPlaces();
+  say(`<span class="spin"></span> Reading the parish spreadsheet…`);
+  try {
+    RAW_TABLE = await loadTable(ATTENDANCE);
+    GENERATED = new Date().toISOString();
+    renderDashboard(payloadFrom(RAW_TABLE));
+    sections.forEach((s) => { s.hidden = false; });
+    bar.remove();
+  } catch (err) {
+    say(`<span><strong>Could not read the spreadsheet.</strong> ` +
+        `${sentence(err.message || String(err))} This page keeps no copy of the data, ` +
+        `so there is nothing to show until the read works. ` +
+        `<a href="${SHEET_URL}" target="_blank" rel="noopener">Open the sheet</a>.</span>` +
+        `<button type="button">Try again</button>`, true);
+    bar.querySelector("button").addEventListener("click", () => location.reload());
+  }
+})();
+
+</script>
+
+</html>
